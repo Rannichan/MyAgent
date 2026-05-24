@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Brain, ImagePlus, MessageSquarePlus, Pencil, Save, Send, Settings, Trash2, UserRound, Wrench } from 'lucide-react';
+import { Bot, Brain, ImagePlus, MessageSquarePlus, Moon, Pencil, Save, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
 import { api } from './api';
 import type { Attachment, ChatMessage, Conversation, Mode, NpcProfile, RuntimeConfig } from './types';
 
@@ -8,9 +8,17 @@ type Sampling = {
   top_p: number;
   max_tokens: number;
 };
+type ThemeMode = 'light' | 'dark';
 
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
+
+function resolveInitialTheme(): ThemeMode {
+  if (typeof window === 'undefined') return 'light';
+  const stored = window.localStorage.getItem('theme-mode');
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
 function normalizeMode(value: Conversation['mode']): Mode {
   return value === 'npc' ? 'npc' : 'agent';
@@ -82,6 +90,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState('');
+  const [theme, setTheme] = useState<ThemeMode>(resolveInitialTheme);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -104,6 +113,11 @@ export default function App() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [active, busy]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem('theme-mode', theme);
+  }, [theme]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
 
@@ -293,6 +307,9 @@ export default function App() {
             <option value="">选择 NPC</option>
             {npcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name}</option>)}
           </select>
+          <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           {active && <button className="icon-button danger" title="删除会话" onClick={() => removeConversation(active.id)}><Trash2 size={18} /></button>}
         </header>
 
@@ -325,30 +342,32 @@ export default function App() {
           <div ref={bottomRef} />
         </section>
 
-        <section className="settings-bar">
-          <div className="settings-title"><Settings size={16} /> 参数</div>
-          <label>温度 <input type="number" min="0" max="2" step="0.1" value={sampling.temperature} onChange={(event) => setSampling({ ...sampling, temperature: Number(event.target.value) })} /></label>
-          <label>Top P <input type="number" min="0" max="1" step="0.05" value={sampling.top_p} onChange={(event) => setSampling({ ...sampling, top_p: Number(event.target.value) })} /></label>
-          <label>Max Tokens <input type="number" min="1" value={sampling.max_tokens} onChange={(event) => setSampling({ ...sampling, max_tokens: Number(event.target.value) })} /></label>
-          <label className="switch"><input type="checkbox" checked={stream} onChange={(event) => setStream(event.target.checked)} /> 流式</label>
-          <label className="switch"><input type="checkbox" checked={thinking} onChange={(event) => setThinking(event.target.checked)} /> 思考</label>
-          <label className="switch"><input type="checkbox" checked={tools} onChange={(event) => setTools(event.target.checked)} /> 工具</label>
-        </section>
+        <div className="bottom-dock">
+          <section className="settings-bar">
+            <div className="settings-title"><Settings size={16} /> 参数</div>
+            <label>温度 <input type="number" min="0" max="2" step="0.1" value={sampling.temperature} onChange={(event) => setSampling({ ...sampling, temperature: Number(event.target.value) })} /></label>
+            <label>Top P <input type="number" min="0" max="1" step="0.05" value={sampling.top_p} onChange={(event) => setSampling({ ...sampling, top_p: Number(event.target.value) })} /></label>
+            <label>Max Tokens <input type="number" min="1" value={sampling.max_tokens} onChange={(event) => setSampling({ ...sampling, max_tokens: Number(event.target.value) })} /></label>
+            <label className="switch"><input type="checkbox" checked={stream} onChange={(event) => setStream(event.target.checked)} /> 流式</label>
+            <label className="switch"><input type="checkbox" checked={thinking} onChange={(event) => setThinking(event.target.checked)} /> 思考</label>
+            <label className="switch"><input type="checkbox" checked={tools} onChange={(event) => setTools(event.target.checked)} /> 工具</label>
+          </section>
 
-        <form className="composer" onSubmit={sendMessage}>
-          <label className="upload-button" title="上传图片或视频">
-            <ImagePlus size={20} />
-            <input type="file" accept="image/*,video/*" multiple onChange={(event) => onUpload(event.target.files)} />
-          </label>
-          <textarea value={message} placeholder="输入消息..." onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }} />
-          <button className="send-button" disabled={busy || !message.trim()} title="发送"><Send size={20} /></button>
-          {attachments.length > 0 && <div className="pending-files">{attachments.map((file) => <span key={file.id}>{file.name}</span>)}</div>}
-        </form>
+          <form className="composer" onSubmit={sendMessage}>
+            <label className="upload-button" title="上传图片或视频">
+              <ImagePlus size={20} />
+              <input type="file" accept="image/*,video/*" multiple onChange={(event) => onUpload(event.target.files)} />
+            </label>
+            <textarea value={message} placeholder="输入消息..." onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }} />
+            <button className="send-button" disabled={busy || !message.trim()} title="发送"><Send size={20} /></button>
+            {attachments.length > 0 && <div className="pending-files">{attachments.map((file) => <span key={file.id}>{file.name}</span>)}</div>}
+          </form>
+        </div>
       </section>
     </main>
   );

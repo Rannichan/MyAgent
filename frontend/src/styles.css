@@ -617,7 +617,8 @@ select.has-value:focus { border-color: var(--md-primary); border-width: 2px; }
   padding: 10px 20px 16px;
 }
 .composer textarea {
-  min-height: 52px;
+  min-height: 40px;
+  height: 40px;
   max-height: 180px;
   resize: vertical;
   padding: 14px;

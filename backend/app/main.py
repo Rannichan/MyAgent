@@ -356,10 +356,12 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
                     content="".join(content_parts).strip(),
                     reasoning_content="".join(reasoning_parts).strip(),
                     tool_calls=tool_calls,
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    usage=TokenUsage(**usage_data) if usage_data else None,
                 )
                 store.append(conversation, assistant_message)
-                latency_ms = int((time.time() - start_time) * 1000)
-                usage = TokenUsage(**usage_data) if usage_data else None
+                latency_ms = assistant_message.latency_ms
+                usage = assistant_message.usage
                 yield f"data: {json.dumps({'type': 'done', 'conversation': conversation.model_dump(mode='json'), 'assistant_message': assistant_message.model_dump(mode='json'), 'raw_tool_calls': tool_calls, 'latency_ms': latency_ms, 'usage': usage.model_dump() if usage else None}, ensure_ascii=False)}\n\n"
             except Exception as exc:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
@@ -371,6 +373,7 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
     latency_ms = int((time.time() - t0) * 1000)
     choice = response.get("choices", [{}])[0]
     message = choice.get("message", {})
+    raw_usage = response.get("usage")
     content, tag_reasoning = split_thinking_tags(message.get("content") or "")
     reasoning_content = message.get("reasoning_content") or message.get("reasoning") or tag_reasoning
     assistant_message = ChatMessage(
@@ -379,11 +382,12 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
         content=content,
         reasoning_content=reasoning_content,
         tool_calls=message.get("tool_calls") or [],
+        latency_ms=latency_ms,
+        usage=TokenUsage(**raw_usage) if raw_usage else None,
         created_at=datetime.utcnow(),
     )
     store.append(conversation, assistant_message)
-    raw_usage = response.get("usage")
-    usage = TokenUsage(**raw_usage) if raw_usage else None
+    usage = assistant_message.usage
     return ChatResponse(
         conversation=conversation,
         assistant_message=assistant_message,

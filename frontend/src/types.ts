@@ -16,6 +16,8 @@ export interface ChatMessage {
   attachments: Attachment[];
   reasoning_content: string;
   tool_calls: unknown[];
+  latency_ms?: number | null;
+  usage?: TokenUsage | null;
 }
 
 export interface Conversation {

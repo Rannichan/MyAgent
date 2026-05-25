@@ -14,12 +14,20 @@ class Attachment(BaseModel):
     kind: Literal["image", "video", "file"]
 
 
+class TokenUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
 class ChatMessage(BaseModel):
     id: str
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     reasoning_content: str = ""
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    latency_ms: Optional[int] = None
+    usage: Optional[TokenUsage] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     attachments: list[Attachment] = Field(default_factory=list)
 
@@ -70,12 +78,6 @@ class ChatRequest(BaseModel):
     tools_enabled: bool = False
     sampling: SamplingSettings = Field(default_factory=SamplingSettings)
     model: Optional[str] = None
-
-
-class TokenUsage(BaseModel):
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
 
 
 class ChatResponse(BaseModel):

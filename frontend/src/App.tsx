@@ -236,7 +236,9 @@ function withMessageDefaults(message: ChatMessage): ChatMessage {
     ...message,
     reasoning_content: message.reasoning_content ?? '',
     tool_calls: message.tool_calls ?? [],
-    attachments: message.attachments ?? []
+    attachments: message.attachments ?? [],
+    latency_ms: message.latency_ms ?? null,
+    usage: message.usage ?? null,
   };
 }
 
@@ -515,25 +517,52 @@ export default function App() {
     if (nextActive) selectConversation(nextActive);
   }
 
-  async function newConversation(nextMode = mode) {
+  async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId) {
     const conversation = await api.createConversation(
       nextMode,
-      nextMode === 'npc' ? npcId : null,
-      nextMode === 'agent' ? agentId : null
+      nextMode === 'npc' ? nextNpcId : null,
+      nextMode === 'agent' ? nextAgentId : null
     );
     setConversations((items) => [conversation, ...items]);
     selectConversation(conversation);
   }
 
+  function findRecentConversationForRole(nextMode: Mode, nextRoleId: string): Conversation | undefined {
+    return conversations.find((conversation) => {
+      if (normalizeMode(conversation.mode) !== nextMode) return false;
+      if (nextMode === 'npc') return (conversation.npc_id ?? '') === nextRoleId;
+      return (conversation.agent_id ?? '') === nextRoleId;
+    });
+  }
+
+  async function switchToRoleConversation(nextMode: Mode, nextRoleId: string) {
+    const recent = findRecentConversationForRole(nextMode, nextRoleId);
+    if (recent) {
+      selectConversation(recent);
+      return;
+    }
+    if (nextMode === 'npc') {
+      await newConversation('npc', nextRoleId, agentId);
+      return;
+    }
+    await newConversation('agent', npcId, nextRoleId);
+  }
+
   async function switchMode(nextMode: Mode) {
     if (nextMode === mode) return;
     setMode(nextMode);
-    const recent = conversations.find((c) => normalizeMode(c.mode) === nextMode);
-    if (recent) {
-      selectConversation(recent);
-    } else {
-      await newConversation(nextMode);
+    const nextRoleId = nextMode === 'npc' ? npcId : agentId;
+    await switchToRoleConversation(nextMode, nextRoleId);
+  }
+
+  async function onRoleChange(nextRoleId: string) {
+    if (mode === 'npc') {
+      setNpcId(nextRoleId);
+      await switchToRoleConversation('npc', nextRoleId);
+      return;
     }
+    setAgentId(nextRoleId);
+    await switchToRoleConversation('agent', nextRoleId);
   }
 
   async function removeConversation(id: string) {
@@ -1124,7 +1153,7 @@ export default function App() {
           <select
             value={mode === 'npc' ? npcId : agentId}
             disabled={mode === 'npc' ? npcs.length === 0 : agents.length === 0}
-            onChange={(event) => (mode === 'npc' ? setNpcId(event.target.value) : setAgentId(event.target.value))}
+            onChange={(event) => { void onRoleChange(event.target.value); }}
             className={(mode === 'npc' ? npcId : agentId) ? 'has-value' : ''}
           >
             <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
@@ -1143,6 +1172,8 @@ export default function App() {
           {activeNpc?.opening && active?.messages.length === 0 && <div className="opening">{activeNpc.opening}</div>}
           {active?.messages.map((message) => {
             const item = withMessageDefaults(message);
+            const messageLatency = item.latency_ms ?? latencyMap[item.id];
+            const messageUsage = item.usage ?? usageMap[item.id];
             return (
               <article key={item.id} className={`message ${item.role}`}>
                 <div className="avatar">{item.role === 'user' ? <UserRound size={18} /> : <Bot size={18} />}</div>
@@ -1154,11 +1185,11 @@ export default function App() {
                     )}
                     {item.role === 'assistant' && (
                       <div className="message-meta">
-                        {latencyMap[item.id] != null && (
-                          <span className="latency">{latencyMap[item.id]} ms</span>
+                        {messageLatency != null && (
+                          <span className="latency">{messageLatency} ms</span>
                         )}
-                        {usageMap[item.id] != null && (
-                          <span className="latency">↑{usageMap[item.id].prompt_tokens} ↓{usageMap[item.id].completion_tokens}</span>
+                        {messageUsage != null && (
+                          <span className="latency">↑{messageUsage.prompt_tokens} ↓{messageUsage.completion_tokens}</span>
                         )}
                         <button className="tiny-button" title="复制回复" onClick={() => void copyAssistantMessage(item)}>
                           {copiedMessageId === item.id ? <Check size={14} /> : <Copy size={14} />}
@@ -1225,7 +1256,7 @@ export default function App() {
               <ImagePlus size={20} />
               <input type="file" accept="image/*,video/*" multiple onChange={(event) => onUpload(event.target.files)} />
             </label>
-            <textarea value={message} placeholder="输入消息..." onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
+            <textarea rows={1} value={message} placeholder="输入消息..." onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();

@@ -384,7 +384,7 @@ export default function App() {
       applyAgentList(agentProfiles, agentProfiles[0]?.id ?? null);
       setConversations(items);
       setModelList(models);
-      setSelectedModel(runtime.model);
+      setSelectedModel(runtime.model || models[0]?.id || '');
       setSampling({
         temperature: runtime.defaults.temperature,
         top_p: runtime.defaults.top_p,
@@ -1350,6 +1350,7 @@ export default function App() {
                         api.saveLlmConfig(llmConfig).then((updated) => {
                           setLlmConfig(updated);
                           setSavedLlmConfig(updated);
+                          setConfig((current) => current ? { ...current, provider: updated.provider } : current);
                           setShowLlmApiKey(false);
                           showToast('保存成功');
                           setLlmConfigSaving(false);
@@ -1488,7 +1489,7 @@ export default function App() {
                 style={{ height: 34, fontSize: 13 }}
                 className={selectedModel ? 'has-value' : ''}
               >
-                {modelList.length === 0 && <option value={selectedModel}>{selectedModel}</option>}
+                {modelList.length === 0 && <option value="">无可用模型</option>}
                 {modelList.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
               </select>
             </label>

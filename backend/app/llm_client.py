@@ -54,8 +54,11 @@ def build_payload(
     tools_enabled: bool,
     model: str | None = None,
 ) -> dict[str, Any]:
+    selected_model = (model or "").strip() or settings.model_name.strip()
+    if not selected_model:
+        raise ValueError("No model selected. Please choose a model from /api/models.")
     payload: dict[str, Any] = {
-        "model": model or settings.model_name,
+        "model": selected_model,
         "messages": messages,
         "stream": stream,
         "temperature": sampling.temperature if sampling.temperature is not None else settings.default_temperature,

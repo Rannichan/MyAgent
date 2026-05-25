@@ -23,8 +23,9 @@ cp .env.example .env
 
 按你的本地模型服务修改 `.env`：
 
-- vLLM: `MODEL_PROVIDER=vllm`，设置 `VLLM_BASE_URL` 和 `MODEL_NAME`
-- llama.cpp: `MODEL_PROVIDER=llamacpp`，设置 `LLAMACPP_BASE_URL` 和 `MODEL_NAME`
+- vLLM: `MODEL_PROVIDER=vllm`，设置 `VLLM_BASE_URL`
+- llama.cpp: `MODEL_PROVIDER=llamacpp`，设置 `LLAMACPP_BASE_URL`
+- 模型名通过前端模型选择器从 `/v1/models` 列表中选择
 
 2. 启动后端：
 

@@ -159,7 +159,7 @@ async def list_models(settings: Settings = Depends(get_settings)) -> list[dict]:
     try:
         return await client.list_models()
     except Exception:
-        return [{"id": settings.model_name, "object": "model"}]
+        return [{"id": settings.model_name, "object": "model"}] if settings.model_name.strip() else []
 
 
 @app.get("/api/agent-profile")
@@ -289,7 +289,6 @@ def update_llm_config(payload: LlmConfig, settings: Settings = Depends(get_setti
         settings.root_dir,
         {
             "MODEL_PROVIDER": payload.provider,
-            "MODEL_NAME": payload.model,
             "VLLM_BASE_URL": payload.vllm_base_url,
             "VLLM_API_KEY": payload.vllm_api_key,
             "LLAMACPP_BASE_URL": payload.llamacpp_base_url,
@@ -426,6 +425,8 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
         conversation, request_payload = _prepare_chat(payload, settings, store)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Conversation not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     client = LlmClient(settings)
     if payload.stream:

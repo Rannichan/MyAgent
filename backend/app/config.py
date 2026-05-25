@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     model_provider: str = Field(default="vllm", pattern="^(vllm|llamacpp)$")
-    model_name: str = "local-model"
+    model_name: str = ""
 
     vllm_base_url: str = "http://127.0.0.1:8000/v1"
     vllm_api_key: str = "EMPTY"

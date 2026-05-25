@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
+import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, Menu, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
@@ -227,6 +227,11 @@ function resolveInitialTheme(): ThemeMode {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function isMobileViewport(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(max-width: 860px)').matches;
+}
+
 function normalizeMode(value: Conversation['mode']): Mode {
   return value === 'npc' ? 'npc' : 'agent';
 }
@@ -370,6 +375,7 @@ export default function App() {
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
   const [toast, setToast] = useState<string>('');
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
@@ -409,6 +415,14 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (!isMobileViewport()) setMobileDrawerOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
@@ -578,6 +592,7 @@ export default function App() {
     setMode(normalizeMode(conversation.mode));
     setNpcId(conversation.npc_id ?? '');
     setAgentId(conversation.agent_id ?? '');
+    if (isMobileViewport()) setMobileDrawerOpen(false);
   }
 
   async function refreshConversations(nextActiveId?: string) {
@@ -1002,7 +1017,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${mobileDrawerOpen ? ' drawer-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <Bot size={24} />
@@ -1012,17 +1027,19 @@ export default function App() {
           </div>
         </div>
         <button
-            className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
-            onClick={() => {
-              if (!canCreateConversation(mode)) {
-                showToast('请先选择一个NPC或者Agent');
-              } else {
-                newConversation();
-              }
-            }}
-          >
-            <MessageSquarePlus size={18} /> 新建会话
-          </button>
+          className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
+          onClick={() => {
+            if (!canCreateConversation(mode)) {
+              showToast('请先选择一个NPC或者Agent');
+            } else {
+              void newConversation().then(() => {
+                if (isMobileViewport()) setMobileDrawerOpen(false);
+              });
+            }
+          }}
+        >
+          <MessageSquarePlus size={18} /> 新建会话
+        </button>
         <div className="conversation-list">
           {conversations.map((conversation) => {
             const convMode = normalizeMode(conversation.mode);
@@ -1050,6 +1067,7 @@ export default function App() {
           })}
         </div>
       </aside>
+      {mobileDrawerOpen && <button className="sidebar-scrim" type="button" aria-label="关闭对话列表" onClick={() => setMobileDrawerOpen(false)} />}
 
       {contextMenu && (
         <>
@@ -1373,6 +1391,14 @@ export default function App() {
 
       <section className="workspace">
         <header className="topbar">
+          <button
+            className="icon-button mobile-drawer-toggle"
+            type="button"
+            title="对话列表"
+            onClick={() => setMobileDrawerOpen((current) => !current)}
+          >
+            <Menu size={18} />
+          </button>
           <div className="mode-tabs">
             {modes.map((item) => (
               <button key={item} className={mode === item ? 'selected' : ''} onClick={() => void switchMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>

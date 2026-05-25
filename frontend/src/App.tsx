@@ -1138,7 +1138,7 @@ export default function App() {
             <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
             {(mode === 'npc' ? npcs : agents).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
           </select>
-          <button className="icon-button" type="button" title="管理设置" onClick={() => openSettings(mode)}>
+          <button className="icon-button topbar-action-start" type="button" title="管理设置" onClick={() => openSettings(mode)}>
             <Settings size={18} />
           </button>
           <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>

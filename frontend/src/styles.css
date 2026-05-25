@@ -113,6 +113,31 @@ button { border: 0; cursor: pointer; }
 }
 .primary-button:hover, .send-button:hover { box-shadow: var(--md-elevation-2); }
 .primary-button:active, .send-button:active { transform: translateY(1px); }
+.primary-button--disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.primary-button--disabled:hover { box-shadow: none; }
+.primary-button--disabled:active { transform: none; }
+
+.snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--md-on-surface);
+  color: var(--md-surface);
+  padding: 14px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: var(--md-elevation-3, 0 4px 8px rgba(0,0,0,.3));
+  pointer-events: none;
+  animation: snackbar-in 200ms cubic-bezier(.2,0,0,1);
+}
+@keyframes snackbar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
 .conversation-list { display: grid; gap: 8px; overflow: auto; padding-right: 2px; }
 .conversation {
@@ -373,7 +398,7 @@ select.has-value:focus { border-color: var(--md-primary); border-width: 2px; }
 .editor-inline { display: grid; gap: 8px; margin-top: 8px; }
 .editor-inline textarea { min-height: 120px; padding: 12px; resize: vertical; }
 .attachments, .pending-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.attachments a, .pending-files span {
+.attachments a, .pending-files .pending-file-chip {
   color: var(--md-primary);
   background: var(--md-primary-container);
   border-radius: 999px;
@@ -645,6 +670,9 @@ select.has-value:focus { border-color: var(--md-primary); border-width: 2px; }
 .send-button { background: var(--md-primary); color: var(--md-on-primary); align-self: start; box-shadow: var(--md-elevation-1); }
 .send-button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 .pending-files { grid-column: 2 / 4; margin-top: 0; }
+.pending-file-chip { display: inline-flex; align-items: center; gap: 4px; }
+.pending-file-remove { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 16px; height: 16px; border-radius: 50%; background: transparent; color: inherit; opacity: 0.7; cursor: pointer; border: none; line-height: 1; }
+.pending-file-remove:hover { opacity: 1; background: color-mix(in srgb, currentColor 15%, transparent); }
 
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }

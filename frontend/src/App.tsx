@@ -284,7 +284,7 @@ function MessageParts({ message, autoCollapseDetails = false }: { message: ChatM
   }, [autoCollapseDetails]);
 
   if (item.role === 'user') {
-    return <p className="body-text">{item.content}</p>;
+    return <div className="markdown-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.content) }} />;
   }
 
   return (
@@ -369,6 +369,8 @@ export default function App() {
   const [llmConfigSaving, setLlmConfigSaving] = useState(false);
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
+  const [toast, setToast] = useState<string>('');
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -411,6 +413,17 @@ export default function App() {
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
+
+  function canCreateConversation(nextMode: Mode, nextNpcId = npcId, nextAgentId = agentId): boolean {
+    if (nextMode === 'npc') return !!nextNpcId && npcs.some((npc) => npc.id === nextNpcId);
+    return !!nextAgentId && agents.some((agent) => agent.id === nextAgentId);
+  }
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 3000);
+  }
 
   function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
     if (!id) return items;
@@ -574,7 +587,8 @@ export default function App() {
     if (nextActive) selectConversation(nextActive);
   }
 
-  async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId) {
+  async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId): Promise<Conversation | null> {
+    if (!canCreateConversation(nextMode, nextNpcId, nextAgentId)) return null;
     const conversation = await api.createConversation(
       nextMode,
       nextMode === 'npc' ? nextNpcId : null,
@@ -582,6 +596,7 @@ export default function App() {
     );
     setConversations((items) => [conversation, ...items]);
     selectConversation(conversation);
+    return conversation;
   }
 
   function findRecentConversationForRole(nextMode: Mode, nextRoleId: string): Conversation | undefined {
@@ -608,17 +623,29 @@ export default function App() {
   async function switchMode(nextMode: Mode) {
     if (nextMode === mode) return;
     setMode(nextMode);
-    const nextRoleId = nextMode === 'npc' ? npcId : agentId;
-    await switchToRoleConversation(nextMode, nextRoleId);
+    setActive(null);
+    if (nextMode === 'npc') {
+      setNpcId('');
+      return;
+    }
+    setAgentId('');
   }
 
   async function onRoleChange(nextRoleId: string) {
     if (mode === 'npc') {
       setNpcId(nextRoleId);
+      if (!nextRoleId) {
+        setActive(null);
+        return;
+      }
       await switchToRoleConversation('npc', nextRoleId);
       return;
     }
     setAgentId(nextRoleId);
+    if (!nextRoleId) {
+      setActive(null);
+      return;
+    }
     await switchToRoleConversation('agent', nextRoleId);
   }
 
@@ -700,7 +727,7 @@ export default function App() {
           opening: npcDraft.opening?.trim() || null
         });
       }
-      await refreshNpcs(nextId, !npcEditingId);
+      await refreshNpcs(npcEditingId ? nextId : undefined, !npcEditingId);
       setNpcEditingId(nextId);
       setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
     } catch (error) {
@@ -762,7 +789,7 @@ export default function App() {
       } else {
         await api.createAgent(payload);
       }
-      await refreshAgents(nextId, !agentEditingId);
+      await refreshAgents(agentEditingId ? nextId : undefined, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft(payload);
     } catch (error) {
@@ -870,8 +897,9 @@ export default function App() {
 
     let conversation = active;
     if (!conversation) {
-      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null, mode === 'agent' ? agentId : null);
-      setConversations((items) => [conversation!, ...items]);
+      const created = await newConversation(mode, mode === 'npc' ? npcId : undefined, mode === 'agent' ? agentId : undefined);
+      if (!created) return;
+      conversation = created;
     }
 
     const content = message;
@@ -983,9 +1011,18 @@ export default function App() {
             <span>{config ? `${config.provider} · ${selectedModel || config.model}` : '加载中'}</span>
           </div>
         </div>
-        <button className="primary-button" onClick={() => newConversation()}>
-          <MessageSquarePlus size={18} /> 新建会话
-        </button>
+        <button
+            className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
+            onClick={() => {
+              if (!canCreateConversation(mode)) {
+                showToast('请先选择一个NPC或者Agent');
+              } else {
+                newConversation();
+              }
+            }}
+          >
+            <MessageSquarePlus size={18} /> 新建会话
+          </button>
         <div className="conversation-list">
           {conversations.map((conversation) => {
             const convMode = normalizeMode(conversation.mode);
@@ -1360,7 +1397,6 @@ export default function App() {
 
         <section className="chat-panel">
           {!active && <div className="empty-state">选择或新建一个会话</div>}
-          {activeNpc?.opening && active?.messages.length === 0 && <div className="opening">{activeNpc.opening}</div>}
           {active?.messages.map((message) => {
             const item = withMessageDefaults(message);
             const messageLatency = item.latency_ms ?? latencyMap[item.id];
@@ -1453,11 +1489,21 @@ export default function App() {
                 event.currentTarget.form?.requestSubmit();
               }
             }} />
-            <button className="send-button" disabled={busy || !message.trim()} title="发送"><Send size={20} /></button>
-            {attachments.length > 0 && <div className="pending-files">{attachments.map((file) => <span key={file.id}>{file.name}</span>)}</div>}
+            <button className="send-button" disabled={busy || !message.trim() || (!active && !canCreateConversation(mode))} title="发送"><Send size={20} /></button>
+            {attachments.length > 0 && (
+              <div className="pending-files">
+                {attachments.map((file) => (
+                  <span key={file.id} className="pending-file-chip">
+                    {file.name}
+                    <button type="button" className="pending-file-remove" title="移除" onClick={() => setAttachments((items) => items.filter((a) => a.id !== file.id))}><X size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
           </form>
         </div>
       </section>
+      {toast && <div className="snackbar">{toast}</div>}
     </main>
   );
 }

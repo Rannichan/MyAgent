@@ -273,7 +273,7 @@ select.has-value:focus { border-color: var(--md-primary); border-width: 2px; }
 .v-select-trigger.has-value .v-select-arrow,
 .v-select-trigger.has-value .v-select-check { color: var(--md-on-secondary-container); }
 .v-select-trigger.has-value:hover:not(:disabled) { border-color: var(--md-on-secondary-container); }
-.v-select-menu { max-height: 320px; overflow-y: auto; }
+.v-select-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: 320px; overflow-y: auto; z-index: 200; }
 .v-select-item { gap: 0; padding-left: 4px; }
 .v-select-item-check { width: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--md-primary); }
 .v-select-item-selected { background: color-mix(in srgb, var(--md-primary) 12%, transparent); }

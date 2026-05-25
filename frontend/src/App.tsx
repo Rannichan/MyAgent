@@ -342,21 +342,16 @@ interface VSelectProps {
 
 function VSelect({ value, options, onChange, disabled, placeholder, className, style }: VSelectProps) {
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ left: number; top: number; minWidth: number }>({ left: 0, top: 0, minWidth: 0 });
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const selected = options.find((o) => o.value === value);
 
   function handleOpen() {
     if (disabled) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ left: rect.left, top: rect.bottom + 4, minWidth: rect.width });
     setOpen(true);
   }
 
   return (
     <div className={`v-select${className ? ` ${className}` : ''}`} style={style}>
       <button
-        ref={triggerRef}
         type="button"
         disabled={disabled}
         className={`v-select-trigger${value ? ' has-value' : ''}`}
@@ -374,7 +369,6 @@ function VSelect({ value, options, onChange, disabled, placeholder, className, s
           <div
             className="context-menu v-select-menu"
             role="listbox"
-            style={{ left: menuPos.left, top: menuPos.top, minWidth: menuPos.minWidth }}
           >
             {placeholder && (
               <button

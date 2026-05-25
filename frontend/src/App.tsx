@@ -1260,7 +1260,7 @@ export default function App() {
                     </label>
                     <label>
                       API Key
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="input-with-action">
                         <input
                           type={showLlmApiKey ? 'text' : 'password'}
                           value={llmConfig.provider === 'llamacpp' ? llmConfig.llamacpp_api_key : llmConfig.vllm_api_key}
@@ -1268,10 +1268,9 @@ export default function App() {
                             ? { ...llmConfig, llamacpp_api_key: e.target.value }
                             : { ...llmConfig, vllm_api_key: e.target.value })}
                           placeholder="EMPTY"
-                          style={{ flex: 1 }}
                         />
                         <button
-                          className="tiny-button"
+                          className="tiny-button input-action-button"
                           type="button"
                           onClick={() => setShowLlmApiKey((current) => !current)}
                           title={showLlmApiKey ? '隐藏 API Key' : '显示 API Key'}

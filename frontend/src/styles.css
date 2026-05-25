@@ -555,6 +555,22 @@ select.has-value:focus { border-color: var(--md-primary); border-width: 2px; }
 .npc-form textarea, .npc-form input {
   padding: 10px 12px;
 }
+.input-with-action {
+  position: relative;
+}
+.input-with-action input {
+  width: 100%;
+  padding-right: 40px;
+}
+.input-action-button {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+.input-action-button:hover {
+  background: var(--md-surface-container-high);
+}
 .npc-form textarea {
   resize: vertical;
   min-height: 120px;

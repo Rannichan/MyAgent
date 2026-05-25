@@ -63,7 +63,7 @@ npc/example/
 
 `agent/` 目录中的 `soul.md`、`agent.md`、`identity.md`、`memory.md` 会按文件名顺序拼接为默认 system prompt。你可以继续添加 `.md` 文件，后端会一起读取。
 
-同时支持在前端顶部「Agent 管理」中新增、编辑、删除并保存 Agent 配置（保存为 `agent/profiles/<id>/system.md`），并在 Agent 模式下选择不同 Agent。
+同时支持在前端顶部「Agent 管理」中新增、编辑、删除并保存 Agent 配置（保存为 `agent/profiles/<id>/system.md`、`agent.md`、`identity.md`、`memory.md`、`soul.md`），并在 Agent 模式下选择不同 Agent。
 
 ## 图片与视频
 

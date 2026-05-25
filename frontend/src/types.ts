@@ -47,12 +47,23 @@ export interface NpcDraft {
 export interface AgentProfile {
   id: string;
   name: string;
+  agent: string;
+  identity: string;
+  memory: string;
+  soul: string;
   system_prompt: string;
 }
 
 export interface AgentDraft {
   id: string;
-  system_prompt: string;
+  agent: string;
+  identity: string;
+  memory: string;
+  soul: string;
+}
+
+export interface UserConfig {
+  content: string;
 }
 
 export interface TokenUsage {
@@ -78,4 +89,13 @@ export interface RuntimeConfig {
     thinking: boolean;
     tools: boolean;
   };
+}
+
+export interface LlmConfig {
+  provider: string;
+  model: string;
+  vllm_base_url: string;
+  vllm_api_key: string;
+  llamacpp_base_url: string;
+  llamacpp_api_key: string;
 }

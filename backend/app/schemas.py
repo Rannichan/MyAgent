@@ -110,14 +110,37 @@ class NpcUpdate(BaseModel):
 class AgentProfile(BaseModel):
     id: str
     name: str
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""
     system_prompt: str
 
 
 class AgentCreate(BaseModel):
     id: str = Field(min_length=1, max_length=64)
-    system_prompt: str = Field(min_length=1)
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""
 
 
 class AgentUpdate(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    system_prompt: str = Field(min_length=1)
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""
+
+
+class UserConfig(BaseModel):
+    content: str = ""
+
+
+class LlmConfig(BaseModel):
+    provider: str = "vllm"
+    model: str = "local-model"
+    vllm_base_url: str = "http://127.0.0.1:8000/v1"
+    vllm_api_key: str = "EMPTY"
+    llamacpp_base_url: str = "http://127.0.0.1:8080/v1"
+    llamacpp_api_key: str = "EMPTY"

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bot, Brain, Check, ChevronDown, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
+import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
@@ -360,12 +360,15 @@ export default function App() {
   const [agentSaving, setAgentSaving] = useState(false);
   const [agentError, setAgentError] = useState<string>('');
   const [userContent, setUserContent] = useState('');
+  const [savedUserContent, setSavedUserContent] = useState('');
   const [userSaving, setUserSaving] = useState(false);
   const [userError, setUserError] = useState<string>('');
   const emptyLlmConfig: LlmConfig = { provider: 'vllm', model: '', vllm_base_url: '', vllm_api_key: '', llamacpp_base_url: '', llamacpp_api_key: '' };
   const [llmConfig, setLlmConfig] = useState<LlmConfig>(emptyLlmConfig);
+  const [savedLlmConfig, setSavedLlmConfig] = useState<LlmConfig>(emptyLlmConfig);
   const [llmConfigSaving, setLlmConfigSaving] = useState(false);
   const [llmConfigError, setLlmConfigError] = useState<string>('');
+  const [showLlmApiKey, setShowLlmApiKey] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -389,7 +392,9 @@ export default function App() {
       setThinking(runtime.defaults.thinking);
       setTools(runtime.defaults.tools);
       setUserContent((userCfg as UserConfig).content);
+      setSavedUserContent((userCfg as UserConfig).content);
       setLlmConfig(llmCfg as LlmConfig);
+      setSavedLlmConfig(llmCfg as LlmConfig);
       if (items[0]) selectConversation(items[0]);
     });
   }, []);
@@ -454,35 +459,69 @@ export default function App() {
     applyAgentList(items, preferredId, appendPreferredToBottom);
   }
 
-  function openSettings(tab: 'npc' | 'agent' | 'user' | 'config') {
-    setSettingsTab(tab);
-    if (tab === 'npc') {
-      const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
-      if (initial) {
-        setNpcEditingId(initial.id);
-        setNpcDraft({ id: initial.id, system_prompt: initial.system_prompt, opening: initial.opening ?? '' });
-      } else {
-        setNpcEditingId(null);
-        setNpcDraft(emptyNpcDraft);
-      }
-      setNpcError('');
-    } else if (tab === 'agent') {
-      const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
-      if (initial) {
-        setAgentEditingId(initial.id);
-        setAgentDraft({
-          id: initial.id,
-          agent: initial.agent,
-          identity: initial.identity,
-          memory: initial.memory,
-          soul: initial.soul
-        });
-      } else {
-        setAgentEditingId(null);
-        setAgentDraft(emptyAgentDraft);
-      }
-      setAgentError('');
+  function resetNpcDraft(preferredId?: string | null) {
+    const initial = npcs.find((item) => item.id === (preferredId ?? npcId)) ?? npcs[0] ?? null;
+    if (initial) {
+      setNpcEditingId(initial.id);
+      setNpcDraft({ id: initial.id, system_prompt: initial.system_prompt, opening: initial.opening ?? '' });
+    } else {
+      setNpcEditingId(null);
+      setNpcDraft(emptyNpcDraft);
     }
+    setNpcError('');
+  }
+
+  function resetAgentDraft(preferredId?: string | null) {
+    const initial = agents.find((item) => item.id === (preferredId ?? agentId)) ?? agents[0] ?? null;
+    if (initial) {
+      setAgentEditingId(initial.id);
+      setAgentDraft({
+        id: initial.id,
+        agent: initial.agent,
+        identity: initial.identity,
+        memory: initial.memory,
+        soul: initial.soul
+      });
+    } else {
+      setAgentEditingId(null);
+      setAgentDraft(emptyAgentDraft);
+    }
+    setAgentError('');
+  }
+
+  function resetUserDraft() {
+    setUserContent(savedUserContent);
+    setUserError('');
+  }
+
+  function resetLlmConfigDraft() {
+    setLlmConfig(savedLlmConfig);
+    setLlmConfigError('');
+    setShowLlmApiKey(false);
+  }
+
+  function discardUnsavedSettings() {
+    resetNpcDraft();
+    resetAgentDraft();
+    resetUserDraft();
+    resetLlmConfigDraft();
+  }
+
+  function switchSettingsTab(tab: 'npc' | 'agent' | 'user' | 'config') {
+    discardUnsavedSettings();
+    setSettingsTab(tab);
+    setProfileContextMenu(null);
+  }
+
+  function closeSettings() {
+    discardUnsavedSettings();
+    setSettingsOpen(false);
+    setProfileContextMenu(null);
+  }
+
+  function openSettings(tab: 'npc' | 'agent' | 'user' | 'config') {
+    discardUnsavedSettings();
+    setSettingsTab(tab);
     setProfileContextMenu(null);
     setSettingsOpen(true);
   }
@@ -634,7 +673,7 @@ export default function App() {
   }
 
   async function saveNpcDraft() {
-    const nextId = npcDraft.id.trim();
+    const nextId = (npcEditingId ?? npcDraft.id).trim();
     const prompt = npcDraft.system_prompt.trim();
     if (!nextId) {
       setNpcError('请填写 NPC 标识');
@@ -702,7 +741,7 @@ export default function App() {
   }
 
   async function saveAgentDraft() {
-    const nextId = agentDraft.id.trim();
+    const nextId = (agentEditingId ?? agentDraft.id).trim();
     if (!nextId) {
       setAgentError('请填写 Agent 标识');
       return;
@@ -1005,20 +1044,17 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <div className="npc-editor-overlay" onClick={() => {
-          setSettingsOpen(false);
-          setProfileContextMenu(null);
-        }}>
+        <div className="npc-editor-overlay" onClick={closeSettings}>
           <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
             <div className="npc-editor-head">
               <strong>设置</strong>
-              <button className="tiny-button" type="button" onClick={() => { setSettingsOpen(false); setProfileContextMenu(null); }}><X size={14} /></button>
+              <button className="tiny-button" type="button" onClick={closeSettings}><X size={14} /></button>
             </div>
             <div className="settings-tabs">
-              <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => { setSettingsTab('npc'); setProfileContextMenu(null); }}>NPC 管理</button>
-              <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => { setSettingsTab('agent'); setProfileContextMenu(null); }}>Agent 管理</button>
-              <button type="button" className={settingsTab === 'user' ? 'selected' : ''} onClick={() => { setSettingsTab('user'); setProfileContextMenu(null); }}>User 管理</button>
-              <button type="button" className={settingsTab === 'config' ? 'selected' : ''} onClick={() => { setSettingsTab('config'); setProfileContextMenu(null); }}>LLM配置</button>
+              <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => switchSettingsTab('npc')}>NPC 管理</button>
+              <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => switchSettingsTab('agent')}>Agent 管理</button>
+              <button type="button" className={settingsTab === 'user' ? 'selected' : ''} onClick={() => switchSettingsTab('user')}>User 管理</button>
+              <button type="button" className={settingsTab === 'config' ? 'selected' : ''} onClick={() => switchSettingsTab('config')}>LLM配置</button>
             </div>
             {settingsTab === 'npc' && (
               <div className="npc-editor-body">
@@ -1053,6 +1089,7 @@ export default function App() {
                         value={npcDraft.id}
                         onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
                         placeholder="例如 assistant"
+                        readOnly={Boolean(npcEditingId)}
                       />
                     </label>
                     <label>
@@ -1114,6 +1151,7 @@ export default function App() {
                         value={agentDraft.id}
                         onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
                         placeholder="例如 planner"
+                        readOnly={Boolean(agentEditingId)}
                       />
                     </label>
                     <label>
@@ -1181,6 +1219,7 @@ export default function App() {
                         setUserSaving(true);
                         setUserError('');
                         api.saveUser(userContent).then(() => {
+                          setSavedUserContent(userContent);
                           setUserSaving(false);
                         }).catch((err: unknown) => {
                           setUserError(`保存失败：${String(err)}`);
@@ -1221,14 +1260,25 @@ export default function App() {
                     </label>
                     <label>
                       API Key
-                      <input
-                        type="password"
-                        value={llmConfig.provider === 'llamacpp' ? llmConfig.llamacpp_api_key : llmConfig.vllm_api_key}
-                        onChange={(e) => setLlmConfig(llmConfig.provider === 'llamacpp'
-                          ? { ...llmConfig, llamacpp_api_key: e.target.value }
-                          : { ...llmConfig, vllm_api_key: e.target.value })}
-                        placeholder="EMPTY"
-                      />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type={showLlmApiKey ? 'text' : 'password'}
+                          value={llmConfig.provider === 'llamacpp' ? llmConfig.llamacpp_api_key : llmConfig.vllm_api_key}
+                          onChange={(e) => setLlmConfig(llmConfig.provider === 'llamacpp'
+                            ? { ...llmConfig, llamacpp_api_key: e.target.value }
+                            : { ...llmConfig, vllm_api_key: e.target.value })}
+                          placeholder="EMPTY"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="tiny-button"
+                          type="button"
+                          onClick={() => setShowLlmApiKey((current) => !current)}
+                          title={showLlmApiKey ? '隐藏 API Key' : '显示 API Key'}
+                        >
+                          {showLlmApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
                     </label>
                     {llmConfigError && <div className="npc-error">{llmConfigError}</div>}
                   </div>
@@ -1242,6 +1292,8 @@ export default function App() {
                         setLlmConfigError('');
                         api.saveLlmConfig(llmConfig).then((updated) => {
                           setLlmConfig(updated);
+                          setSavedLlmConfig(updated);
+                          setShowLlmApiKey(false);
                           setLlmConfigSaving(false);
                         }).catch((err: unknown) => {
                           setLlmConfigError(`保存失败：${String(err)}`);

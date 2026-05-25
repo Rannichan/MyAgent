@@ -72,7 +72,6 @@ button { border: 0; cursor: pointer; }
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  width: 300px;
   border-right: 1px solid var(--md-outline-variant);
   background: var(--md-surface-container-high);
 }

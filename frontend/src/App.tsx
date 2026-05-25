@@ -411,34 +411,8 @@ export default function App() {
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
 
-  useEffect(() => {
-    function handleResize() {
-      if (window.innerWidth > 860) {
-        setMobileDrawerOpen(false);
-      }
-    }
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (!mobileDrawerOpen) return;
-    function handleEsc(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMobileDrawerOpen(false);
-    }
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [mobileDrawerOpen]);
-
-
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
-
-  function closeMobileDrawerIfNeeded() {
-    if (window.matchMedia('(max-width: 860px)').matches) {
-      setMobileDrawerOpen(false);
-    }
-  }
 
   function canCreateConversation(nextMode: Mode, nextNpcId = npcId, nextAgentId = agentId): boolean {
     if (nextMode === 'npc') return !!nextNpcId && npcs.some((npc) => npc.id === nextNpcId);
@@ -604,7 +578,9 @@ export default function App() {
     setMode(normalizeMode(conversation.mode));
     setNpcId(conversation.npc_id ?? '');
     setAgentId(conversation.agent_id ?? '');
-    closeMobileDrawerIfNeeded();
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      setMobileDrawerOpen(false);
+    }
   }
 
   async function refreshConversations(nextActiveId?: string) {

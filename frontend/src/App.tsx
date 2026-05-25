@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
-import type { Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
+import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
 
 type Sampling = {
   temperature: number;
@@ -14,6 +14,7 @@ type ThemeMode = 'light' | 'dark';
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
 const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '' };
+const emptyAgentDraft: AgentDraft = { id: '', system_prompt: '' };
 
 function safeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation';
@@ -181,12 +182,14 @@ function MessageParts({ message }: { message: ChatMessage }) {
 export default function App() {
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [npcs, setNpcs] = useState<NpcProfile[]>([]);
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
   const [mode, setMode] = useState<Mode>('agent');
   const [npcId, setNpcId] = useState<string>('');
+  const [agentId, setAgentId] = useState<string>('');
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sampling, setSampling] = useState<Sampling>(emptySampling);
@@ -205,12 +208,18 @@ export default function App() {
   const [npcDraft, setNpcDraft] = useState<NpcDraft>(emptyNpcDraft);
   const [npcSaving, setNpcSaving] = useState(false);
   const [npcError, setNpcError] = useState<string>('');
+  const [agentEditorOpen, setAgentEditorOpen] = useState(false);
+  const [agentEditingId, setAgentEditingId] = useState<string | null>(null);
+  const [agentDraft, setAgentDraft] = useState<AgentDraft>(emptyAgentDraft);
+  const [agentSaving, setAgentSaving] = useState(false);
+  const [agentError, setAgentError] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    Promise.all([api.config(), api.npcs(), api.conversations(), api.models()]).then(([runtime, profiles, items, models]) => {
+    Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models()]).then(([runtime, profiles, agentProfiles, items, models]) => {
       setConfig(runtime);
       applyNpcList(profiles, profiles[0]?.id ?? null);
+      applyAgentList(agentProfiles, agentProfiles[0]?.id ?? null);
       setConversations(items);
       setModelList(models);
       setSelectedModel(runtime.model);
@@ -243,6 +252,7 @@ export default function App() {
   }, [contextMenu]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
+  const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
 
   function applyNpcList(next: NpcProfile[], preferredId?: string | null) {
     setNpcs(next);
@@ -261,6 +271,25 @@ export default function App() {
   async function refreshNpcs(preferredId?: string | null) {
     const items = await api.npcs();
     applyNpcList(items, preferredId);
+  }
+
+  function applyAgentList(next: AgentProfile[], preferredId?: string | null) {
+    setAgents(next);
+    if (next.length === 0) {
+      setAgentId('');
+      return;
+    }
+    const candidate = preferredId ?? agentId;
+    if (candidate && next.some((agent) => agent.id === candidate)) {
+      setAgentId(candidate);
+      return;
+    }
+    setAgentId(next[0].id);
+  }
+
+  async function refreshAgents(preferredId?: string | null) {
+    const items = await api.agents();
+    applyAgentList(items, preferredId);
   }
 
   function openNpcEditor() {
@@ -296,10 +325,42 @@ export default function App() {
     setNpcError('');
   }
 
+  function openAgentEditor() {
+    const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
+    if (initial) {
+      setAgentEditingId(initial.id);
+      setAgentDraft({
+        id: initial.id,
+        system_prompt: initial.system_prompt
+      });
+    } else {
+      setAgentEditingId(null);
+      setAgentDraft(emptyAgentDraft);
+    }
+    setAgentError('');
+    setAgentEditorOpen(true);
+  }
+
+  function selectAgentForEdit(profile: AgentProfile) {
+    setAgentEditingId(profile.id);
+    setAgentDraft({
+      id: profile.id,
+      system_prompt: profile.system_prompt
+    });
+    setAgentError('');
+  }
+
+  function startNewAgent() {
+    setAgentEditingId(null);
+    setAgentDraft(emptyAgentDraft);
+    setAgentError('');
+  }
+
   function selectConversation(conversation: Conversation) {
     setActive({ ...conversation, messages: conversation.messages.map(withMessageDefaults) });
     setMode(normalizeMode(conversation.mode));
     setNpcId(conversation.npc_id ?? '');
+    setAgentId(conversation.agent_id ?? '');
   }
 
   async function refreshConversations(nextActiveId?: string) {
@@ -310,7 +371,11 @@ export default function App() {
   }
 
   async function newConversation(nextMode = mode) {
-    const conversation = await api.createConversation(nextMode, nextMode === 'npc' ? npcId : null);
+    const conversation = await api.createConversation(
+      nextMode,
+      nextMode === 'npc' ? npcId : null,
+      nextMode === 'agent' ? agentId : null
+    );
     setConversations((items) => [conversation, ...items]);
     selectConversation(conversation);
   }
@@ -360,7 +425,8 @@ export default function App() {
     const conversation = getConversation(id);
     if (!conversation) return;
     const npcName = npcs.find((npc) => npc.id === conversation.npc_id)?.name;
-    const assistantName = normalizeMode(conversation.mode) === 'npc' ? (npcName || 'NPC') : 'Agent';
+    const agentName = agents.find((agent) => agent.id === conversation.agent_id)?.name;
+    const assistantName = normalizeMode(conversation.mode) === 'npc' ? (npcName || 'NPC') : (agentName || 'Agent');
     const blob = await conversationToImageBlob(conversation, assistantName);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -441,6 +507,74 @@ export default function App() {
     }
   }
 
+  async function saveAgentDraft() {
+    const nextId = agentDraft.id.trim();
+    const prompt = agentDraft.system_prompt.trim();
+    if (!nextId) {
+      setAgentError('请填写 Agent 标识');
+      return;
+    }
+    if (!prompt) {
+      setAgentError('请填写 system prompt');
+      return;
+    }
+
+    setAgentSaving(true);
+    setAgentError('');
+    try {
+      if (agentEditingId) {
+        await api.updateAgent(agentEditingId, {
+          id: nextId,
+          system_prompt: prompt
+        });
+      } else {
+        await api.createAgent({
+          id: nextId,
+          system_prompt: prompt
+        });
+      }
+      await refreshAgents(nextId);
+      setAgentEditingId(nextId);
+      setAgentDraft({ id: nextId, system_prompt: prompt });
+    } catch (error) {
+      setAgentError(`保存失败：${String(error)}`);
+    } finally {
+      setAgentSaving(false);
+    }
+  }
+
+  async function removeAgentDraft() {
+    if (!agentEditingId) return;
+    const ok = window.confirm(`确认删除 Agent「${agentEditingId}」吗？`);
+    if (!ok) return;
+    setAgentSaving(true);
+    setAgentError('');
+    try {
+      await api.deleteAgent(agentEditingId);
+      const remaining = agents.filter((agent) => agent.id !== agentEditingId);
+      const nextId = remaining[0]?.id ?? '';
+      applyAgentList(remaining, nextId);
+      if (!nextId) {
+        setAgentEditingId(null);
+        setAgentDraft(emptyAgentDraft);
+      } else {
+        const profile = remaining[0];
+        setAgentEditingId(profile.id);
+        setAgentDraft({
+          id: profile.id,
+          system_prompt: profile.system_prompt
+        });
+      }
+      if (mode === 'agent') {
+        await newConversation('agent');
+      }
+    } catch (error) {
+      setAgentError(`删除失败：${String(error)}`);
+    } finally {
+      setAgentSaving(false);
+    }
+  }
+
   async function onUpload(files: FileList | null) {
     if (!files?.length) return;
     const uploaded = await api.upload(files);
@@ -450,14 +584,22 @@ export default function App() {
   async function sendContent(content: string, atts: Attachment[], conversationToUse: Conversation) {
     const activeMode = normalizeMode(conversationToUse.mode === 'normal' ? mode : conversationToUse.mode as Mode);
     const npc = activeMode === 'npc' ? npcId : null;
+    const agent = activeMode === 'agent' ? agentId : null;
     const localUser = makeMessage('user', content, atts);
     const localAssistant = makeMessage('assistant', '');
-    setActive({ ...conversationToUse, mode: activeMode, npc_id: npc, messages: [...conversationToUse.messages.map(withMessageDefaults), localUser, localAssistant] });
+    setActive({
+      ...conversationToUse,
+      mode: activeMode,
+      npc_id: npc,
+      agent_id: agent,
+      messages: [...conversationToUse.messages.map(withMessageDefaults), localUser, localAssistant]
+    });
 
     const body = {
       conversation_id: conversationToUse.id,
       mode: activeMode,
       npc_id: npc,
+      agent_id: agent,
       message: content,
       attachments: atts,
       stream,
@@ -496,7 +638,7 @@ export default function App() {
 
     let conversation = active;
     if (!conversation) {
-      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null);
+      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null, mode === 'agent' ? agentId : null);
       setConversations((items) => [conversation!, ...items]);
     }
 
@@ -593,7 +735,7 @@ export default function App() {
 
   function assistantDisplayName(): string {
     if (active?.mode === 'npc') return activeNpc?.name ?? 'NPC';
-    return 'Agent';
+    return activeAgent?.name ?? 'Agent';
   }
 
   return (
@@ -717,6 +859,61 @@ export default function App() {
         </div>
       )}
 
+      {agentEditorOpen && (
+        <div className="npc-editor-overlay" onClick={() => setAgentEditorOpen(false)}>
+          <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
+            <div className="npc-editor-head">
+              <strong>Agent 管理</strong>
+              <button className="tiny-button" type="button" onClick={() => setAgentEditorOpen(false)}><X size={14} /></button>
+            </div>
+            <div className="npc-editor-body">
+              <aside className="npc-list">
+                {agents.map((profile) => (
+                  <button
+                    type="button"
+                    key={profile.id}
+                    className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                    onClick={() => selectAgentForEdit(profile)}
+                  >
+                    {profile.name}
+                  </button>
+                ))}
+              </aside>
+              <section className="npc-form">
+                <label>
+                  Agent 标识
+                  <input
+                    value={agentDraft.id}
+                    onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
+                    placeholder="例如 planner"
+                  />
+                </label>
+                <label>
+                  System Prompt
+                  <textarea
+                    value={agentDraft.system_prompt}
+                    onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                    rows={10}
+                  />
+                </label>
+                {agentError && <div className="npc-error">{agentError}</div>}
+                <div className="npc-actions">
+                  <button className="tiny-action" type="button" onClick={startNewAgent}>
+                    <Plus size={14} /> 新建
+                  </button>
+                  <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
+                    <Save size={14} /> 保存
+                  </button>
+                  <button className="tiny-action danger" type="button" onClick={() => void removeAgentDraft()} disabled={!agentEditingId || agentSaving}>
+                    <Trash2 size={14} /> 删除
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="workspace">
         <header className="topbar">
           <div className="mode-tabs">
@@ -724,11 +921,15 @@ export default function App() {
               <button key={item} className={mode === item ? 'selected' : ''} onClick={() => void switchMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>
             ))}
           </div>
-          <select value={npcId} disabled={mode !== 'npc'} onChange={(event) => setNpcId(event.target.value)}>
-            <option value="">选择 NPC</option>
-            {npcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name}</option>)}
+          <select
+            value={mode === 'npc' ? npcId : agentId}
+            disabled={mode === 'npc' ? npcs.length === 0 : agents.length === 0}
+            onChange={(event) => (mode === 'npc' ? setNpcId(event.target.value) : setAgentId(event.target.value))}
+          >
+            <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
+            {(mode === 'npc' ? npcs : agents).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
           </select>
-          <button className="icon-button" type="button" title="管理 NPC" onClick={openNpcEditor}>
+          <button className="icon-button" type="button" title={mode === 'npc' ? '管理 NPC' : '管理 Agent'} onClick={mode === 'npc' ? openNpcEditor : openAgentEditor}>
             <Settings size={18} />
           </button>
           <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>

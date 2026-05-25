@@ -29,6 +29,7 @@ class Conversation(BaseModel):
     title: str
     mode: Literal["normal", "npc", "agent"] = "agent"
     npc_id: Optional[str] = None
+    agent_id: Optional[str] = None
     messages: list[ChatMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -38,12 +39,14 @@ class ConversationCreate(BaseModel):
     title: str = "新会话"
     mode: Literal["normal", "npc", "agent"] = "agent"
     npc_id: Optional[str] = None
+    agent_id: Optional[str] = None
 
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
     mode: Optional[Literal["normal", "npc", "agent"]] = None
     npc_id: Optional[str] = None
+    agent_id: Optional[str] = None
     messages: Optional[list[ChatMessage]] = None
 
 
@@ -59,6 +62,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     mode: Literal["normal", "npc", "agent"] = "agent"
     npc_id: Optional[str] = None
+    agent_id: Optional[str] = None
     message: str
     attachments: list[Attachment] = Field(default_factory=list)
     stream: bool = True
@@ -92,3 +96,19 @@ class NpcUpdate(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1, max_length=64)
     system_prompt: str = Field(min_length=1)
     opening: Optional[str] = None
+
+
+class AgentProfile(BaseModel):
+    id: str
+    name: str
+    system_prompt: str
+
+
+class AgentCreate(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    system_prompt: str = Field(min_length=1)
+
+
+class AgentUpdate(BaseModel):
+    id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    system_prompt: str = Field(min_length=1)

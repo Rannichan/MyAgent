@@ -16,8 +16,31 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings, get_settings
 from .llm_client import LlmClient, build_openai_messages, build_payload
-from .prompt_loader import build_system_prompt, delete_npc, load_agent_prompt, load_npcs, rename_npc, save_npc
-from .schemas import Attachment, ChatMessage, ChatRequest, ChatResponse, ConversationCreate, ConversationUpdate, NpcCreate, NpcUpdate
+from .prompt_loader import (
+    build_system_prompt,
+    delete_agent,
+    delete_npc,
+    load_agent,
+    load_agents,
+    load_agent_prompt,
+    load_npcs,
+    rename_agent,
+    rename_npc,
+    save_agent,
+    save_npc,
+)
+from .schemas import (
+    AgentCreate,
+    AgentUpdate,
+    Attachment,
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    ConversationCreate,
+    ConversationUpdate,
+    NpcCreate,
+    NpcUpdate,
+)
 from .storage import ConversationStore, new_id
 
 THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
@@ -36,6 +59,15 @@ def validate_npc_id(value: str) -> str:
     if npc_id in {".", ".."} or "/" in npc_id or "\\" in npc_id:
         raise HTTPException(status_code=400, detail="Invalid NPC id")
     return npc_id
+
+
+def validate_agent_id(value: str) -> str:
+    agent_id = value.strip()
+    if not agent_id:
+        raise HTTPException(status_code=400, detail="Agent id is required")
+    if agent_id in {".", ".."} or "/" in agent_id or "\\" in agent_id:
+        raise HTTPException(status_code=400, detail="Invalid Agent id")
+    return agent_id
 
 app = FastAPI(title="MyAgent API")
 settings = get_settings()
@@ -125,8 +157,57 @@ async def list_models(settings: Settings = Depends(get_settings)) -> list[dict]:
 
 
 @app.get("/api/agent-profile")
-def read_agent_profile(settings: Settings = Depends(get_settings)) -> dict:
-    return {"system_prompt": load_agent_prompt(settings)}
+def read_agent_profile(agent_id: str | None = None, settings: Settings = Depends(get_settings)) -> dict:
+    if agent_id:
+        profile = load_agent(settings, validate_agent_id(agent_id))
+        if profile:
+            return profile.model_dump(mode="json")
+    return {"id": None, "name": "default", "system_prompt": load_agent_prompt(settings)}
+
+
+@app.get("/api/agents")
+def read_agents(settings: Settings = Depends(get_settings)) -> list[dict]:
+    return [profile.model_dump(mode="json") for profile in load_agents(settings)]
+
+
+@app.post("/api/agents")
+def create_agent(payload: AgentCreate, settings: Settings = Depends(get_settings)) -> dict:
+    agent_id = validate_agent_id(payload.id)
+    target = settings.agent_dir / "profiles" / agent_id
+    legacy_target = settings.agent_dir / "profiles" / f"{agent_id}.md"
+    if target.exists() or legacy_target.exists():
+        raise HTTPException(status_code=409, detail="Agent already exists")
+    profile = save_agent(settings, agent_id, payload.system_prompt)
+    return profile.model_dump(mode="json")
+
+
+@app.put("/api/agents/{agent_id}")
+def update_agent(agent_id: str, payload: AgentUpdate, settings: Settings = Depends(get_settings)) -> dict:
+    current_id = validate_agent_id(agent_id)
+    next_id = validate_agent_id(payload.id) if payload.id is not None else current_id
+    if next_id != current_id:
+        try:
+            rename_agent(settings, current_id, next_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Agent not found") from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=409, detail="Agent already exists") from exc
+    profile_id = next_id
+    source = settings.agent_dir / "profiles" / profile_id
+    legacy_source = settings.agent_dir / "profiles" / f"{profile_id}.md"
+    if not source.exists() and not legacy_source.exists():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    profile = save_agent(settings, profile_id, payload.system_prompt)
+    return profile.model_dump(mode="json")
+
+
+@app.delete("/api/agents/{agent_id}")
+def remove_agent(agent_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    try:
+        delete_agent(settings, validate_agent_id(agent_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent not found") from exc
+    return {"ok": True}
 
 
 @app.get("/api/conversations")
@@ -189,12 +270,13 @@ def _prepare_chat(payload: ChatRequest, settings: Settings, store: ConversationS
         conversation = store.get(payload.conversation_id)
         conversation.mode = payload.mode
         conversation.npc_id = payload.npc_id
+        conversation.agent_id = payload.agent_id
     else:
-        conversation = store.create(ConversationCreate(mode=payload.mode, npc_id=payload.npc_id))
+        conversation = store.create(ConversationCreate(mode=payload.mode, npc_id=payload.npc_id, agent_id=payload.agent_id))
 
     user_message = ChatMessage(id=new_id(), role="user", content=payload.message, attachments=payload.attachments)
     store.append(conversation, user_message)
-    system_prompt = build_system_prompt(settings, payload.mode, payload.npc_id, payload.thinking_enabled)
+    system_prompt = build_system_prompt(settings, payload.mode, payload.npc_id, payload.agent_id, payload.thinking_enabled)
     messages = build_openai_messages(system_prompt, conversation.messages)
     request_payload = build_payload(
         settings=settings,

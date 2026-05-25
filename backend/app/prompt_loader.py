@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 from .config import Settings
-from .schemas import NpcProfile
+from .schemas import AgentProfile, NpcProfile
 
 
 def _read_text(path: Path) -> str:
@@ -84,6 +84,77 @@ def delete_npc(settings: Settings, npc_id: str) -> None:
     target.unlink(missing_ok=True)
 
 
+def _agent_profiles_dir(settings: Settings) -> Path:
+    return settings.agent_dir / "profiles"
+
+
+def load_agents(settings: Settings) -> list[AgentProfile]:
+    directory = _agent_profiles_dir(settings)
+    if not directory.exists():
+        return []
+
+    profiles: list[AgentProfile] = []
+    for path in sorted(directory.iterdir()):
+        if path.is_dir():
+            system_prompt = _read_text(path / "system.md") or _read_text(path / "prompt.md")
+            if system_prompt:
+                profiles.append(AgentProfile(id=path.name, name=path.name, system_prompt=system_prompt))
+        elif path.suffix.lower() == ".md":
+            text = _read_text(path)
+            if text:
+                profiles.append(AgentProfile(id=path.stem, name=path.stem, system_prompt=text))
+    return profiles
+
+
+def load_agent(settings: Settings, agent_id: str | None) -> AgentProfile | None:
+    if not agent_id:
+        return None
+    return next((profile for profile in load_agents(settings) if profile.id == agent_id), None)
+
+
+def save_agent(settings: Settings, agent_id: str, system_prompt: str) -> AgentProfile:
+    directory = _agent_profiles_dir(settings)
+    target = directory / agent_id
+    legacy_file = directory / f"{agent_id}.md"
+    if legacy_file.exists() and legacy_file.is_file():
+        legacy_file.unlink(missing_ok=True)
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "system.md").write_text(system_prompt.strip(), encoding="utf-8")
+    return AgentProfile(id=agent_id, name=agent_id, system_prompt=system_prompt.strip())
+
+
+def rename_agent(settings: Settings, old_id: str, new_id: str) -> None:
+    directory = _agent_profiles_dir(settings)
+    source = directory / old_id
+    source_legacy = directory / f"{old_id}.md"
+    target = directory / new_id
+    target_legacy = directory / f"{new_id}.md"
+    if target.exists() or target_legacy.exists():
+        raise FileExistsError(new_id)
+    if source.exists():
+        source.rename(target)
+        return
+    if source_legacy.exists():
+        source_legacy.rename(target)
+        return
+    raise FileNotFoundError(old_id)
+
+
+def delete_agent(settings: Settings, agent_id: str) -> None:
+    directory = _agent_profiles_dir(settings)
+    target = directory / agent_id
+    legacy_file = directory / f"{agent_id}.md"
+    if not target.exists():
+        if legacy_file.exists():
+            legacy_file.unlink(missing_ok=True)
+            return
+        raise FileNotFoundError(agent_id)
+    if target.is_dir():
+        shutil.rmtree(target)
+        return
+    target.unlink(missing_ok=True)
+
+
 def load_agent_prompt(settings: Settings) -> str:
     if not settings.agent_dir.exists():
         return ""
@@ -109,14 +180,21 @@ def load_agent_prompt(settings: Settings) -> str:
     return "\n\n".join(parts)
 
 
-def build_system_prompt(settings: Settings, mode: str, npc_id: str | None, thinking_enabled: bool) -> str | None:
+def build_system_prompt(
+    settings: Settings,
+    mode: str,
+    npc_id: str | None,
+    agent_id: str | None,
+    thinking_enabled: bool,
+) -> str | None:
     parts: list[str] = []
     if mode == "npc":
         npc = load_npc(settings, npc_id)
         if npc:
             parts.append(npc.system_prompt)
     elif mode == "agent":
-        agent_prompt = load_agent_prompt(settings)
+        agent_profile = load_agent(settings, agent_id)
+        agent_prompt = agent_profile.system_prompt if agent_profile else load_agent_prompt(settings)
         if agent_prompt:
             parts.append(agent_prompt)
 

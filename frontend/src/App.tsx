@@ -745,6 +745,7 @@ export default function App() {
       await refreshNpcs(npcEditingId ? nextId : undefined, !npcEditingId);
       setNpcEditingId(nextId);
       setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
+      showToast('NPC 保存成功');
     } catch (error) {
       setNpcError(`保存失败：${String(error)}`);
     } finally {
@@ -807,6 +808,7 @@ export default function App() {
       await refreshAgents(agentEditingId ? nextId : undefined, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft(payload);
+      showToast('Agent 保存成功');
     } catch (error) {
       setAgentError(`保存失败：${String(error)}`);
     } finally {
@@ -958,31 +960,35 @@ export default function App() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const handleEvent = (event: string) => {
+      const line = event.split(/\r?\n/).find((item) => item.startsWith('data:'));
+      if (!line) return;
+      const raw = line.replace(/^data:\s?/, '').trim();
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data.type === 'token') appendToAssistantPart(assistantId, 'content', data.content);
+      if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
+      if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
+      if (data.type === 'done') {
+        selectConversation(data.conversation);
+        if (data.latency_ms != null && data.assistant_message?.id) {
+          setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
+        }
+        if (data.usage != null && data.assistant_message?.id) {
+          setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
+        }
+      }
+      if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
+    };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
+      const events = buffer.split(/\r?\n\r?\n/);
       buffer = events.pop() ?? '';
-      for (const event of events) {
-        const line = event.split('\n').find((item) => item.startsWith('data: '));
-        if (!line) continue;
-        const data = JSON.parse(line.slice(6));
-        if (data.type === 'token') appendToAssistantPart(assistantId, 'content', data.content);
-        if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
-        if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
-        if (data.type === 'done') {
-          selectConversation(data.conversation);
-          if (data.latency_ms != null && data.assistant_message?.id) {
-            setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
-          }
-          if (data.usage != null && data.assistant_message?.id) {
-            setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
-          }
-        }
-        if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
-      }
+      events.forEach(handleEvent);
     }
+    if (buffer.trim()) handleEvent(buffer);
   }
 
   function appendToAssistantPart(id: string, field: 'content' | 'reasoning_content', token: string) {
@@ -1275,6 +1281,7 @@ export default function App() {
                         setUserError('');
                         api.saveUser(userContent).then(() => {
                           setSavedUserContent(userContent);
+                          showToast('User 保存成功');
                           setUserSaving(false);
                         }).catch((err: unknown) => {
                           setUserError(`保存失败：${String(err)}`);
@@ -1348,6 +1355,7 @@ export default function App() {
                           setLlmConfig(updated);
                           setSavedLlmConfig(updated);
                           setShowLlmApiKey(false);
+                          showToast('LLM 配置保存成功');
                           setLlmConfigSaving(false);
                         }).catch((err: unknown) => {
                           setLlmConfigError(`保存失败：${String(err)}`);

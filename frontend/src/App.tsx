@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
+import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, Menu, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
@@ -371,6 +371,7 @@ export default function App() {
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
   const [toast, setToast] = useState<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(() => localStorage.getItem('drawer-open') !== 'false');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -409,6 +410,10 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('drawer-open', drawerOpen ? 'true' : 'false');
+  }, [drawerOpen]);
 
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
@@ -1022,14 +1027,22 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
+    <main className={`app-shell${drawerOpen ? '' : ' drawer-collapsed'}`}>
+      <aside className={`sidebar${drawerOpen ? '' : ' sidebar-collapsed'}`}>
         <div className="brand">
           <Bot size={24} />
-          <div>
+          <div className="brand-text">
             <strong>MyAgent</strong>
             <span>{config ? `${config.provider} · ${selectedModel || config.model}` : '加载中'}</span>
           </div>
+          <button
+            type="button"
+            className="drawer-toggle"
+            onClick={() => setDrawerOpen((v) => !v)}
+            title={drawerOpen ? '收起侧栏' : '展开侧栏'}
+          >
+            <Menu size={20} />
+          </button>
         </div>
         <button
             className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
@@ -1041,7 +1054,7 @@ export default function App() {
               }
             }}
           >
-            <MessageSquarePlus size={18} /> 新建会话
+            <MessageSquarePlus size={18} /><span className="drawer-label">新建会话</span>
           </button>
         <div className="conversation-list">
           {conversations.map((conversation) => {
@@ -1053,6 +1066,7 @@ export default function App() {
               <button
                 key={conversation.id}
                 className={conversation.id === active?.id ? 'conversation active' : 'conversation'}
+                title={drawerOpen ? undefined : conversation.title}
                 onClick={() => selectConversation(conversation)}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -1060,6 +1074,9 @@ export default function App() {
                   setProfileContextMenu(null);
                 }}
               >
+                <div className="conv-avatar" aria-hidden="true">
+                  {conversation.title.charAt(0).toUpperCase() || '·'}
+                </div>
                 <div className="conv-info">
                   <span>{conversation.title}</span>
                   {roleName && <em className="conv-role">{roleName}</em>}

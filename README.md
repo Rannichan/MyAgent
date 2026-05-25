@@ -47,6 +47,32 @@ npm run dev
 
 打开 `http://127.0.0.1:5173`。
 
+## Android 应用（Capacitor）
+
+已在 `frontend/android/` 提供 Android 工程，直接复用当前前端页面与业务逻辑。
+
+1. 构建前端资源（可选指定后端地址）：
+
+```bash
+cd frontend
+# 按实际后端地址设置，例如 http://192.168.1.10:8765
+VITE_API_BASE_URL=http://127.0.0.1:8765 npm run build
+```
+
+2. 同步到 Android 工程：
+
+```bash
+npx cap sync android
+```
+
+3. 使用 Android Studio 打开并部署：
+
+- 打开 `frontend/android/`
+- 连接手机（开启开发者模式与 USB 调试）或启动模拟器
+- 运行 `app` 模块安装到设备
+
+> 如果后端不在同一地址，请在构建时更新 `VITE_API_BASE_URL` 后重新 `npm run build && npx cap sync android`。
+
 ## NPC 模式
 
 在 `npc/` 下每个子目录代表一个角色：

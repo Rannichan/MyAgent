@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MyAgent</string>
+    <string name="title_activity_main">MyAgent</string>
+    <string name="package_name">com.rannichan.myagent</string>
+    <string name="custom_url_scheme">com.rannichan.myagent</string>
+</resources>

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     app_host: str = "127.0.0.1"
     app_port: int = 8765
     app_public_url: str = "http://127.0.0.1:8765"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost,capacitor://localhost"
 
     model_provider: str = Field(default="vllm", pattern="^(vllm|llamacpp)$")
     model_name: str = ""

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
-import { api } from './api';
+import { api, apiUrl } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
 
 type Sampling = {
@@ -871,7 +871,7 @@ export default function App() {
       if (stream) {
         await streamChat(body, localAssistant.id);
       } else {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(apiUrl('/api/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -965,7 +965,7 @@ export default function App() {
   }
 
   async function streamChat(body: unknown, assistantId: string) {
-    const response = await fetch('/api/chat', {
+    const response = await fetch(apiUrl('/api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
+import { Bot, Brain, Check, ChevronDown, Copy, Download, Eye, EyeOff, ImagePlus, Menu, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
@@ -370,6 +370,7 @@ export default function App() {
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
   const [toast, setToast] = useState<string>('');
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
@@ -410,9 +411,34 @@ export default function App() {
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
 
+  useEffect(() => {
+    function handleResize() {
+      if (window.innerWidth > 860) {
+        setMobileDrawerOpen(false);
+      }
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    function handleEsc(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMobileDrawerOpen(false);
+    }
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [mobileDrawerOpen]);
+
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
+
+  function closeMobileDrawerIfNeeded() {
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      setMobileDrawerOpen(false);
+    }
+  }
 
   function canCreateConversation(nextMode: Mode, nextNpcId = npcId, nextAgentId = agentId): boolean {
     if (nextMode === 'npc') return !!nextNpcId && npcs.some((npc) => npc.id === nextNpcId);
@@ -578,6 +604,7 @@ export default function App() {
     setMode(normalizeMode(conversation.mode));
     setNpcId(conversation.npc_id ?? '');
     setAgentId(conversation.agent_id ?? '');
+    closeMobileDrawerIfNeeded();
   }
 
   async function refreshConversations(nextActiveId?: string) {
@@ -1022,7 +1049,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${mobileDrawerOpen ? ' drawer-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <Bot size={24} />
@@ -1070,6 +1097,7 @@ export default function App() {
           })}
         </div>
       </aside>
+      <button className="drawer-scrim" type="button" aria-label="关闭会话列表" onClick={() => setMobileDrawerOpen(false)} />
 
       {contextMenu && (
         <>
@@ -1395,6 +1423,14 @@ export default function App() {
 
       <section className="workspace">
         <header className="topbar">
+          <button
+            className="icon-button drawer-toggle"
+            type="button"
+            title={mobileDrawerOpen ? '收起会话列表' : '展开会话列表'}
+            onClick={() => setMobileDrawerOpen((open) => !open)}
+          >
+            {mobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
           <div className="mode-tabs">
             {modes.map((item) => (
               <button key={item} className={mode === item ? 'selected' : ''} onClick={() => void switchMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>

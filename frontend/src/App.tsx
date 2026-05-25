@@ -345,6 +345,7 @@ export default function App() {
   const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
   const [usageMap, setUsageMap] = useState<Record<string, TokenUsage>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [profileContextMenu, setProfileContextMenu] = useState<{ x: number; y: number; id: string; kind: 'npc' | 'agent' } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'npc' | 'agent'>('npc');
@@ -392,51 +393,63 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
+    if (!contextMenu && !profileContextMenu) return;
+    const handler = () => {
+      setContextMenu(null);
+      setProfileContextMenu(null);
+    };
     window.addEventListener('click', handler);
     return () => window.removeEventListener('click', handler);
-  }, [contextMenu]);
+  }, [contextMenu, profileContextMenu]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
 
-  function applyNpcList(next: NpcProfile[], preferredId?: string | null) {
-    setNpcs(next);
-    if (next.length === 0) {
+  function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
+    if (!id) return items;
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0 || index === items.length - 1) return items;
+    return [...items.slice(0, index), ...items.slice(index + 1), items[index]];
+  }
+
+  function applyNpcList(next: NpcProfile[], preferredId?: string | null, appendPreferredToBottom = false) {
+    const ordered = appendPreferredToBottom ? moveProfileToBottom(next, preferredId) : next;
+    setNpcs(ordered);
+    if (ordered.length === 0) {
       setNpcId('');
       return;
     }
     const candidate = preferredId ?? npcId;
-    if (candidate && next.some((npc) => npc.id === candidate)) {
+    if (candidate && ordered.some((npc) => npc.id === candidate)) {
       setNpcId(candidate);
       return;
     }
-    setNpcId(next[0].id);
+    setNpcId(ordered[0].id);
   }
 
-  async function refreshNpcs(preferredId?: string | null) {
+  async function refreshNpcs(preferredId?: string | null, appendPreferredToBottom = false) {
     const items = await api.npcs();
-    applyNpcList(items, preferredId);
+    applyNpcList(items, preferredId, appendPreferredToBottom);
   }
 
-  function applyAgentList(next: AgentProfile[], preferredId?: string | null) {
-    setAgents(next);
-    if (next.length === 0) {
+  function applyAgentList(next: AgentProfile[], preferredId?: string | null, appendPreferredToBottom = false) {
+    const ordered = appendPreferredToBottom ? moveProfileToBottom(next, preferredId) : next;
+    setAgents(ordered);
+    if (ordered.length === 0) {
       setAgentId('');
       return;
     }
     const candidate = preferredId ?? agentId;
-    if (candidate && next.some((agent) => agent.id === candidate)) {
+    if (candidate && ordered.some((agent) => agent.id === candidate)) {
       setAgentId(candidate);
       return;
     }
-    setAgentId(next[0].id);
+    setAgentId(ordered[0].id);
   }
 
-  async function refreshAgents(preferredId?: string | null) {
+  async function refreshAgents(preferredId?: string | null, appendPreferredToBottom = false) {
     const items = await api.agents();
-    applyAgentList(items, preferredId);
+    applyAgentList(items, preferredId, appendPreferredToBottom);
   }
 
   function openSettings(tab: 'npc' | 'agent') {
@@ -462,6 +475,7 @@ export default function App() {
       }
       setAgentError('');
     }
+    setProfileContextMenu(null);
     setSettingsOpen(true);
   }
 
@@ -609,7 +623,7 @@ export default function App() {
           opening: npcDraft.opening?.trim() || null
         });
       }
-      await refreshNpcs(nextId);
+      await refreshNpcs(nextId, !npcEditingId);
       setNpcEditingId(nextId);
       setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
     } catch (error) {
@@ -619,15 +633,14 @@ export default function App() {
     }
   }
 
-  async function removeNpcDraft() {
-    if (!npcEditingId) return;
-    const ok = window.confirm(`确认删除 NPC「${npcEditingId}」吗？`);
+  async function removeNpcDraft(id: string) {
+    const ok = window.confirm(`确认删除 NPC「${id}」吗？`);
     if (!ok) return;
     setNpcSaving(true);
     setNpcError('');
     try {
-      await api.deleteNpc(npcEditingId);
-      const remaining = npcs.filter((npc) => npc.id !== npcEditingId);
+      await api.deleteNpc(id);
+      const remaining = npcs.filter((npc) => npc.id !== id);
       const nextId = remaining[0]?.id ?? '';
       applyNpcList(remaining, nextId);
       if (!nextId) {
@@ -642,7 +655,7 @@ export default function App() {
           opening: profile.opening ?? ''
         });
       }
-      if (mode === 'npc') {
+      if (mode === 'npc' && id === npcId) {
         await newConversation('npc');
       }
     } catch (error) {
@@ -678,7 +691,7 @@ export default function App() {
           system_prompt: prompt
         });
       }
-      await refreshAgents(nextId);
+      await refreshAgents(nextId, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft({ id: nextId, system_prompt: prompt });
     } catch (error) {
@@ -688,15 +701,14 @@ export default function App() {
     }
   }
 
-  async function removeAgentDraft() {
-    if (!agentEditingId) return;
-    const ok = window.confirm(`确认删除 Agent「${agentEditingId}」吗？`);
+  async function removeAgentDraft(id: string) {
+    const ok = window.confirm(`确认删除 Agent「${id}」吗？`);
     if (!ok) return;
     setAgentSaving(true);
     setAgentError('');
     try {
-      await api.deleteAgent(agentEditingId);
-      const remaining = agents.filter((agent) => agent.id !== agentEditingId);
+      await api.deleteAgent(id);
+      const remaining = agents.filter((agent) => agent.id !== id);
       const nextId = remaining[0]?.id ?? '';
       applyAgentList(remaining, nextId);
       if (!nextId) {
@@ -710,7 +722,7 @@ export default function App() {
           system_prompt: profile.system_prompt
         });
       }
-      if (mode === 'agent') {
+      if (mode === 'agent' && id === agentId) {
         await newConversation('agent');
       }
     } catch (error) {
@@ -916,6 +928,7 @@ export default function App() {
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, id: conversation.id });
+                  setProfileContextMenu(null);
                 }}
               >
                 <div className="conv-info">
@@ -957,15 +970,18 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <div className="npc-editor-overlay" onClick={() => setSettingsOpen(false)}>
+        <div className="npc-editor-overlay" onClick={() => {
+          setSettingsOpen(false);
+          setProfileContextMenu(null);
+        }}>
           <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
             <div className="npc-editor-head">
               <strong>设置</strong>
-              <button className="tiny-button" type="button" onClick={() => setSettingsOpen(false)}><X size={14} /></button>
+              <button className="tiny-button" type="button" onClick={() => { setSettingsOpen(false); setProfileContextMenu(null); }}><X size={14} /></button>
             </div>
             <div className="settings-tabs">
-              <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => setSettingsTab('npc')}>NPC 管理</button>
-              <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => setSettingsTab('agent')}>Agent 管理</button>
+              <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => { setSettingsTab('npc'); setProfileContextMenu(null); }}>NPC 管理</button>
+              <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => { setSettingsTab('agent'); setProfileContextMenu(null); }}>Agent 管理</button>
             </div>
             {settingsTab === 'npc' && (
               <div className="npc-editor-body">
@@ -977,6 +993,10 @@ export default function App() {
                         key={profile.id}
                         className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
                         onClick={() => selectNpcForEdit(profile)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setProfileContextMenu({ x: event.clientX, y: event.clientY, id: profile.id, kind: 'npc' });
+                        }}
                       >
                         {profile.name}
                       </button>
@@ -989,37 +1009,36 @@ export default function App() {
                   </div>
                 </aside>
                 <section className="npc-form">
-                  <label>
-                    NPC 标识
-                    <input
-                      value={npcDraft.id}
-                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
-                      placeholder="例如 assistant"
-                    />
-                  </label>
-                  <label>
-                    System Prompt
-                    <textarea
-                      value={npcDraft.system_prompt}
-                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
-                      rows={8}
-                    />
-                  </label>
-                  <label>
-                    Opening（可选）
-                    <textarea
-                      value={npcDraft.opening ?? ''}
-                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
-                      rows={4}
-                    />
-                  </label>
-                  {npcError && <div className="npc-error">{npcError}</div>}
+                  <div className="npc-form-fields">
+                    <label>
+                      NPC 标识
+                      <input
+                        value={npcDraft.id}
+                        onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
+                        placeholder="例如 assistant"
+                      />
+                    </label>
+                    <label>
+                      System Prompt
+                      <textarea
+                        value={npcDraft.system_prompt}
+                        onChange={(event) => setNpcDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                        rows={12}
+                      />
+                    </label>
+                    <label>
+                      Opening（可选）
+                      <textarea
+                        value={npcDraft.opening ?? ''}
+                        onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
+                        rows={6}
+                      />
+                    </label>
+                    {npcError && <div className="npc-error">{npcError}</div>}
+                  </div>
                   <div className="npc-actions">
                     <button className="tiny-action" type="button" onClick={() => void saveNpcDraft()} disabled={npcSaving}>
                       <Save size={14} /> 保存
-                    </button>
-                    <button className="tiny-action danger" type="button" onClick={() => void removeNpcDraft()} disabled={!npcEditingId || npcSaving}>
-                      <Trash2 size={14} /> 删除
                     </button>
                   </div>
                 </section>
@@ -1035,6 +1054,10 @@ export default function App() {
                         key={profile.id}
                         className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
                         onClick={() => selectAgentForEdit(profile)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setProfileContextMenu({ x: event.clientX, y: event.clientY, id: profile.id, kind: 'agent' });
+                        }}
                       >
                         {profile.name}
                       </button>
@@ -1047,35 +1070,56 @@ export default function App() {
                   </div>
                 </aside>
                 <section className="npc-form">
-                  <label>
-                    Agent 标识
-                    <input
-                      value={agentDraft.id}
-                      onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
-                      placeholder="例如 planner"
-                    />
-                  </label>
-                  <label>
-                    System Prompt
-                    <textarea
-                      value={agentDraft.system_prompt}
-                      onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
-                      rows={10}
-                    />
-                  </label>
-                  {agentError && <div className="npc-error">{agentError}</div>}
+                  <div className="npc-form-fields">
+                    <label>
+                      Agent 标识
+                      <input
+                        value={agentDraft.id}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
+                        placeholder="例如 planner"
+                      />
+                    </label>
+                    <label>
+                      System Prompt
+                      <textarea
+                        value={agentDraft.system_prompt}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                        rows={14}
+                      />
+                    </label>
+                    {agentError && <div className="npc-error">{agentError}</div>}
+                  </div>
                   <div className="npc-actions">
                     <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
                       <Save size={14} /> 保存
-                    </button>
-                    <button className="tiny-action danger" type="button" onClick={() => void removeAgentDraft()} disabled={!agentEditingId || agentSaving}>
-                      <Trash2 size={14} /> 删除
                     </button>
                   </div>
                 </section>
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {profileContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: profileContextMenu.x, top: profileContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            className="context-menu-item danger"
+            onClick={() => {
+              if (profileContextMenu.kind === 'npc') {
+                void removeNpcDraft(profileContextMenu.id);
+              } else {
+                void removeAgentDraft(profileContextMenu.id);
+              }
+              setProfileContextMenu(null);
+            }}
+          >
+            <Trash2 size={14} /> 删除
+          </button>
         </div>
       )}
 

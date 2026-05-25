@@ -595,11 +595,9 @@ export default function App() {
     if (isMobileViewport()) setMobileDrawerOpen(false);
   }
 
-  async function refreshConversations(nextActiveId?: string) {
-    const items = await api.conversations();
-    setConversations(items);
-    const nextActive = items.find((item) => item.id === nextActiveId) ?? (active ? items.find((item) => item.id === active.id) : null);
-    if (nextActive) selectConversation(nextActive);
+  function applyServerConversation(conversation: Conversation) {
+    setConversations((items) => [conversation, ...items.filter((item) => item.id !== conversation.id)]);
+    selectConversation(conversation);
   }
 
   async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId): Promise<Conversation | null> {
@@ -893,7 +891,7 @@ export default function App() {
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
-        selectConversation(data.conversation);
+        applyServerConversation(data.conversation);
         if (data.latency_ms != null && data.assistant_message?.id) {
           setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
         }
@@ -901,7 +899,6 @@ export default function App() {
           setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
         }
       }
-      await refreshConversations(conversationToUse.id);
     } catch (error) {
       appendToAssistantPart(localAssistant.id, 'content', `\n请求失败：${String(error)}`);
     }
@@ -970,7 +967,7 @@ export default function App() {
       if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
       if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
       if (data.type === 'done') {
-        selectConversation(data.conversation);
+        applyServerConversation(data.conversation);
         if (data.latency_ms != null && data.assistant_message?.id) {
           setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
         }

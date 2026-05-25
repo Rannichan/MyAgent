@@ -35,6 +35,12 @@ export interface NpcProfile {
   opening?: string | null;
 }
 
+export interface NpcDraft {
+  id: string;
+  system_prompt: string;
+  opening?: string | null;
+}
+
 export interface ModelInfo {
   id: string;
   object?: string;

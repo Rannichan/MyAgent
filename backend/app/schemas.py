@@ -80,3 +80,15 @@ class NpcProfile(BaseModel):
     name: str
     system_prompt: str
     opening: Optional[str] = None
+
+
+class NpcCreate(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    system_prompt: str = Field(min_length=1)
+    opening: Optional[str] = None
+
+
+class NpcUpdate(BaseModel):
+    id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    system_prompt: str = Field(min_length=1)
+    opening: Optional[str] = None

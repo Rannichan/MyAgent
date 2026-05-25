@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
+import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
-import type { Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcProfile, RuntimeConfig } from './types';
+import type { Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
 
 type Sampling = {
   temperature: number;
@@ -13,6 +13,7 @@ type ThemeMode = 'light' | 'dark';
 
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
+const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '' };
 
 function safeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation';
@@ -199,12 +200,17 @@ export default function App() {
   const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [npcEditorOpen, setNpcEditorOpen] = useState(false);
+  const [npcEditingId, setNpcEditingId] = useState<string | null>(null);
+  const [npcDraft, setNpcDraft] = useState<NpcDraft>(emptyNpcDraft);
+  const [npcSaving, setNpcSaving] = useState(false);
+  const [npcError, setNpcError] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     Promise.all([api.config(), api.npcs(), api.conversations(), api.models()]).then(([runtime, profiles, items, models]) => {
       setConfig(runtime);
-      setNpcs(profiles);
+      applyNpcList(profiles, profiles[0]?.id ?? null);
       setConversations(items);
       setModelList(models);
       setSelectedModel(runtime.model);
@@ -237,6 +243,58 @@ export default function App() {
   }, [contextMenu]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
+
+  function applyNpcList(next: NpcProfile[], preferredId?: string | null) {
+    setNpcs(next);
+    if (next.length === 0) {
+      setNpcId('');
+      return;
+    }
+    const candidate = preferredId ?? npcId;
+    if (candidate && next.some((npc) => npc.id === candidate)) {
+      setNpcId(candidate);
+      return;
+    }
+    setNpcId(next[0].id);
+  }
+
+  async function refreshNpcs(preferredId?: string | null) {
+    const items = await api.npcs();
+    applyNpcList(items, preferredId);
+  }
+
+  function openNpcEditor() {
+    const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
+    if (initial) {
+      setNpcEditingId(initial.id);
+      setNpcDraft({
+        id: initial.id,
+        system_prompt: initial.system_prompt,
+        opening: initial.opening ?? ''
+      });
+    } else {
+      setNpcEditingId(null);
+      setNpcDraft(emptyNpcDraft);
+    }
+    setNpcError('');
+    setNpcEditorOpen(true);
+  }
+
+  function selectNpcForEdit(profile: NpcProfile) {
+    setNpcEditingId(profile.id);
+    setNpcDraft({
+      id: profile.id,
+      system_prompt: profile.system_prompt,
+      opening: profile.opening ?? ''
+    });
+    setNpcError('');
+  }
+
+  function startNewNpc() {
+    setNpcEditingId(null);
+    setNpcDraft(emptyNpcDraft);
+    setNpcError('');
+  }
 
   function selectConversation(conversation: Conversation) {
     setActive({ ...conversation, messages: conversation.messages.map(withMessageDefaults) });
@@ -310,6 +368,77 @@ export default function App() {
     link.download = `${safeFilename(conversation.title)}.png`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function saveNpcDraft() {
+    const nextId = npcDraft.id.trim();
+    const prompt = npcDraft.system_prompt.trim();
+    if (!nextId) {
+      setNpcError('请填写 NPC 标识');
+      return;
+    }
+    if (!prompt) {
+      setNpcError('请填写 system prompt');
+      return;
+    }
+
+    setNpcSaving(true);
+    setNpcError('');
+    try {
+      if (npcEditingId) {
+        await api.updateNpc(npcEditingId, {
+          id: nextId,
+          system_prompt: prompt,
+          opening: npcDraft.opening?.trim() || null
+        });
+      } else {
+        await api.createNpc({
+          id: nextId,
+          system_prompt: prompt,
+          opening: npcDraft.opening?.trim() || null
+        });
+      }
+      await refreshNpcs(nextId);
+      setNpcEditingId(nextId);
+      setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
+    } catch (error) {
+      setNpcError(`保存失败：${String(error)}`);
+    } finally {
+      setNpcSaving(false);
+    }
+  }
+
+  async function removeNpcDraft() {
+    if (!npcEditingId) return;
+    const ok = window.confirm(`确认删除 NPC「${npcEditingId}」吗？`);
+    if (!ok) return;
+    setNpcSaving(true);
+    setNpcError('');
+    try {
+      await api.deleteNpc(npcEditingId);
+      const remaining = npcs.filter((npc) => npc.id !== npcEditingId);
+      const nextId = remaining[0]?.id ?? '';
+      applyNpcList(remaining, nextId);
+      if (!nextId) {
+        setNpcEditingId(null);
+        setNpcDraft(emptyNpcDraft);
+      } else {
+        const profile = remaining[0];
+        setNpcEditingId(profile.id);
+        setNpcDraft({
+          id: profile.id,
+          system_prompt: profile.system_prompt,
+          opening: profile.opening ?? ''
+        });
+      }
+      if (mode === 'npc') {
+        await newConversation('npc');
+      }
+    } catch (error) {
+      setNpcError(`删除失败：${String(error)}`);
+    } finally {
+      setNpcSaving(false);
+    }
   }
 
   async function onUpload(files: FileList | null) {
@@ -525,6 +654,69 @@ export default function App() {
         </div>
       )}
 
+      {npcEditorOpen && (
+        <div className="npc-editor-overlay" onClick={() => setNpcEditorOpen(false)}>
+          <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
+            <div className="npc-editor-head">
+              <strong>NPC 管理</strong>
+              <button className="tiny-button" type="button" onClick={() => setNpcEditorOpen(false)}><X size={14} /></button>
+            </div>
+            <div className="npc-editor-body">
+              <aside className="npc-list">
+                {npcs.map((profile) => (
+                  <button
+                    type="button"
+                    key={profile.id}
+                    className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                    onClick={() => selectNpcForEdit(profile)}
+                  >
+                    {profile.name}
+                  </button>
+                ))}
+              </aside>
+              <section className="npc-form">
+                <label>
+                  NPC 标识
+                  <input
+                    value={npcDraft.id}
+                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
+                    placeholder="例如 assistant"
+                  />
+                </label>
+                <label>
+                  System Prompt
+                  <textarea
+                    value={npcDraft.system_prompt}
+                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                    rows={8}
+                  />
+                </label>
+                <label>
+                  Opening（可选）
+                  <textarea
+                    value={npcDraft.opening ?? ''}
+                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
+                    rows={4}
+                  />
+                </label>
+                {npcError && <div className="npc-error">{npcError}</div>}
+                <div className="npc-actions">
+                  <button className="tiny-action" type="button" onClick={startNewNpc}>
+                    <Plus size={14} /> 新建
+                  </button>
+                  <button className="tiny-action" type="button" onClick={() => void saveNpcDraft()} disabled={npcSaving}>
+                    <Save size={14} /> 保存
+                  </button>
+                  <button className="tiny-action danger" type="button" onClick={() => void removeNpcDraft()} disabled={!npcEditingId || npcSaving}>
+                    <Trash2 size={14} /> 删除
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="workspace">
         <header className="topbar">
           <div className="mode-tabs">
@@ -536,6 +728,9 @@ export default function App() {
             <option value="">选择 NPC</option>
             {npcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name}</option>)}
           </select>
+          <button className="icon-button" type="button" title="管理 NPC" onClick={openNpcEditor}>
+            <Settings size={18} />
+          </button>
           <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>

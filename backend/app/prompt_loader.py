@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from .config import Settings
@@ -32,6 +33,55 @@ def load_npc(settings: Settings, npc_id: str | None) -> NpcProfile | None:
     if not npc_id:
         return None
     return next((profile for profile in load_npcs(settings) if profile.id == npc_id), None)
+
+
+def save_npc(settings: Settings, npc_id: str, system_prompt: str, opening: str | None) -> NpcProfile:
+    target = settings.npc_dir / npc_id
+    legacy_file = settings.npc_dir / f"{npc_id}.md"
+    if legacy_file.exists() and legacy_file.is_file():
+        legacy_file.unlink(missing_ok=True)
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "system.md").write_text(system_prompt.strip(), encoding="utf-8")
+
+    opening_path = target / "opening.md"
+    opening_text = (opening or "").strip()
+    if opening_text:
+        opening_path.write_text(opening_text, encoding="utf-8")
+    else:
+        opening_path.unlink(missing_ok=True)
+
+    return NpcProfile(id=npc_id, name=npc_id, system_prompt=system_prompt.strip(), opening=opening_text or None)
+
+
+def rename_npc(settings: Settings, old_id: str, new_id: str) -> None:
+    source = settings.npc_dir / old_id
+    source_legacy = settings.npc_dir / f"{old_id}.md"
+    target = settings.npc_dir / new_id
+    target_legacy = settings.npc_dir / f"{new_id}.md"
+    if target.exists() or target_legacy.exists():
+        raise FileExistsError(new_id)
+    if source.exists():
+        source.rename(target)
+        return
+    if source_legacy.exists():
+        source_legacy.rename(target)
+        return
+    if not source.exists():
+        raise FileNotFoundError(old_id)
+
+
+def delete_npc(settings: Settings, npc_id: str) -> None:
+    target = settings.npc_dir / npc_id
+    legacy_file = settings.npc_dir / f"{npc_id}.md"
+    if not target.exists():
+        if legacy_file.exists():
+            legacy_file.unlink(missing_ok=True)
+            return
+        raise FileNotFoundError(npc_id)
+    if target.is_dir():
+        shutil.rmtree(target)
+        return
+    target.unlink(missing_ok=True)
 
 
 def load_agent_prompt(settings: Settings) -> str:

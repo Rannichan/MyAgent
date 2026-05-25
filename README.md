@@ -57,6 +57,7 @@ npc/example/
 ```
 
 前端会自动读取角色列表并允许自由选择。
+同时支持在前端顶部「NPC 管理」中新增、编辑、删除并保存 NPC（保存为 `npc/<id>/system.md` 与可选 `opening.md`）。
 
 ## Agent 模式
 

@@ -16,8 +16,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings, get_settings
 from .llm_client import LlmClient, build_openai_messages, build_payload
-from .prompt_loader import build_system_prompt, load_agent_prompt, load_npcs
-from .schemas import Attachment, ChatMessage, ChatRequest, ChatResponse, ConversationCreate, ConversationUpdate
+from .prompt_loader import build_system_prompt, delete_npc, load_agent_prompt, load_npcs, rename_npc, save_npc
+from .schemas import Attachment, ChatMessage, ChatRequest, ChatResponse, ConversationCreate, ConversationUpdate, NpcCreate, NpcUpdate
 from .storage import ConversationStore, new_id
 
 THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
@@ -27,6 +27,15 @@ def split_thinking_tags(text: str) -> tuple[str, str]:
     reasoning_parts = [match.group(1).strip() for match in THINK_PATTERN.finditer(text) if match.group(1).strip()]
     content = THINK_PATTERN.sub("", text).strip()
     return content, "\n\n".join(reasoning_parts)
+
+
+def validate_npc_id(value: str) -> str:
+    npc_id = value.strip()
+    if not npc_id:
+        raise HTTPException(status_code=400, detail="NPC id is required")
+    if npc_id in {".", ".."} or "/" in npc_id or "\\" in npc_id:
+        raise HTTPException(status_code=400, detail="Invalid NPC id")
+    return npc_id
 
 app = FastAPI(title="MyAgent API")
 settings = get_settings()
@@ -65,6 +74,45 @@ def read_config(settings: Settings = Depends(get_settings)) -> dict:
 @app.get("/api/npcs")
 def read_npcs(settings: Settings = Depends(get_settings)) -> list[dict]:
     return [profile.model_dump() for profile in load_npcs(settings)]
+
+
+@app.post("/api/npcs")
+def create_npc(payload: NpcCreate, settings: Settings = Depends(get_settings)) -> dict:
+    npc_id = validate_npc_id(payload.id)
+    target = settings.npc_dir / npc_id
+    if target.exists():
+        raise HTTPException(status_code=409, detail="NPC already exists")
+    profile = save_npc(settings, npc_id, payload.system_prompt, payload.opening)
+    return profile.model_dump(mode="json")
+
+
+@app.put("/api/npcs/{npc_id}")
+def update_npc(npc_id: str, payload: NpcUpdate, settings: Settings = Depends(get_settings)) -> dict:
+    current_id = validate_npc_id(npc_id)
+    next_id = validate_npc_id(payload.id) if payload.id is not None else current_id
+    if next_id != current_id:
+        try:
+            rename_npc(settings, current_id, next_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="NPC not found") from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=409, detail="NPC already exists") from exc
+    profile_id = next_id
+    source = settings.npc_dir / profile_id
+    legacy_source = settings.npc_dir / f"{profile_id}.md"
+    if not source.exists() and not legacy_source.exists():
+        raise HTTPException(status_code=404, detail="NPC not found")
+    profile = save_npc(settings, profile_id, payload.system_prompt, payload.opening)
+    return profile.model_dump(mode="json")
+
+
+@app.delete("/api/npcs/{npc_id}")
+def remove_npc(npc_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    try:
+        delete_npc(settings, validate_npc_id(npc_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="NPC not found") from exc
+    return {"ok": True}
 
 
 @app.get("/api/models")

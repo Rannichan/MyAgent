@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Mode, ModelInfo, NpcProfile, RuntimeConfig } from './types';
+import type { Attachment, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
 
 export const api = {
   async config(): Promise<RuntimeConfig> {
@@ -9,6 +9,15 @@ export const api = {
   },
   async models(): Promise<ModelInfo[]> {
     return getJson('/api/models');
+  },
+  async createNpc(payload: NpcDraft): Promise<NpcProfile> {
+    return postJson('/api/npcs', payload);
+  },
+  async updateNpc(npcId: string, payload: NpcDraft): Promise<NpcProfile> {
+    return putJson(`/api/npcs/${npcId}`, payload);
+  },
+  async deleteNpc(npcId: string): Promise<void> {
+    await fetch(`/api/npcs/${npcId}`, { method: 'DELETE' });
   },
   async conversations(): Promise<Conversation[]> {
     return getJson('/api/conversations');

@@ -367,6 +367,95 @@ select { height: 40px; padding: 0 12px; }
 .context-menu-item:hover { background: var(--md-surface-container-highest); }
 .context-menu-item.danger { color: var(--md-error); }
 
+.npc-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: grid;
+  place-items: center;
+  z-index: 120;
+  padding: 20px;
+}
+.npc-editor {
+  width: min(920px, 96vw);
+  max-height: min(720px, 92vh);
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+  box-shadow: var(--md-elevation-2);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.npc-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.npc-editor-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 0;
+}
+.npc-list {
+  border-right: 1px solid var(--md-outline-variant);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+}
+.npc-item {
+  border-radius: 10px;
+  min-height: 36px;
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
+  padding: 0 10px;
+}
+.npc-item:hover { background: var(--md-surface-container-highest); }
+.npc-item.active { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.npc-form {
+  padding: 14px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+}
+.npc-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+.npc-form textarea, .npc-form input {
+  padding: 10px 12px;
+}
+.npc-form textarea {
+  resize: vertical;
+}
+.npc-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tiny-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.tiny-action:hover { background: var(--md-surface-container-highest); }
+.tiny-action.danger { color: var(--md-error); }
+.tiny-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.npc-error {
+  color: var(--md-error);
+  font-size: 13px;
+}
+
 .bottom-dock {
   position: sticky;
   bottom: 0;
@@ -413,4 +502,6 @@ select { height: 40px; padding: 0 12px; }
   .conversation-list { grid-auto-flow: column; grid-auto-columns: minmax(190px, 1fr); overflow-x: auto; }
   .message.user, .message.assistant { max-width: 100%; }
   .topbar { flex-wrap: wrap; }
+  .npc-editor-body { grid-template-columns: 1fr; }
+  .npc-list { border-right: 0; border-bottom: 1px solid var(--md-outline-variant); max-height: 160px; }
 }

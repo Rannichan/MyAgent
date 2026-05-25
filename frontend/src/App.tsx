@@ -1125,6 +1125,7 @@ export default function App() {
             value={mode === 'npc' ? npcId : agentId}
             disabled={mode === 'npc' ? npcs.length === 0 : agents.length === 0}
             onChange={(event) => (mode === 'npc' ? setNpcId(event.target.value) : setAgentId(event.target.value))}
+            className={(mode === 'npc' ? npcId : agentId) ? 'has-value' : ''}
           >
             <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
             {(mode === 'npc' ? npcs : agents).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
@@ -1205,6 +1206,7 @@ export default function App() {
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
                 style={{ height: 34, fontSize: 13 }}
+                className={selectedModel ? 'has-value' : ''}
               >
                 {modelList.length === 0 && <option value={selectedModel}>{selectedModel}</option>}
                 {modelList.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}

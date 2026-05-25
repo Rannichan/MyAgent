@@ -392,15 +392,6 @@ export default function App() {
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (!contextMenu && !profileContextMenu) return;
-    const handler = () => {
-      setContextMenu(null);
-      setProfileContextMenu(null);
-    };
-    window.addEventListener('click', handler);
-    return () => window.removeEventListener('click', handler);
-  }, [contextMenu, profileContextMenu]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
@@ -634,8 +625,6 @@ export default function App() {
   }
 
   async function removeNpcDraft(id: string) {
-    const ok = window.confirm(`确认删除 NPC「${id}」吗？`);
-    if (!ok) return;
     setNpcSaving(true);
     setNpcError('');
     try {
@@ -702,8 +691,6 @@ export default function App() {
   }
 
   async function removeAgentDraft(id: string) {
-    const ok = window.confirm(`确认删除 Agent「${id}」吗？`);
-    if (!ok) return;
     setAgentSaving(true);
     setAgentError('');
     try {
@@ -943,30 +930,32 @@ export default function App() {
       </aside>
 
       {contextMenu && (
-        <div
-          className="context-menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="context-menu-item"
-            onClick={() => { void downloadConversationJson(contextMenu.id); setContextMenu(null); }}
+        <>
+          <div className="context-menu-backdrop" onClick={() => setContextMenu(null)} />
+          <div
+            className="context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
           >
-            <Download size={14} /> 下载 JSON
-          </button>
-          <button
-            className="context-menu-item"
-            onClick={() => { void downloadConversationImage(contextMenu.id); setContextMenu(null); }}
-          >
-            <Download size={14} /> 下载图片
-          </button>
-          <button
-            className="context-menu-item danger"
-            onClick={() => { removeConversation(contextMenu.id); setContextMenu(null); }}
-          >
-            <Trash2 size={14} /> 删除会话
-          </button>
-        </div>
+            <button
+              className="context-menu-item"
+              onClick={() => { void downloadConversationJson(contextMenu.id); setContextMenu(null); }}
+            >
+              <Download size={14} /> 下载 JSON
+            </button>
+            <button
+              className="context-menu-item"
+              onClick={() => { void downloadConversationImage(contextMenu.id); setContextMenu(null); }}
+            >
+              <Download size={14} /> 下载图片
+            </button>
+            <button
+              className="context-menu-item danger"
+              onClick={() => { removeConversation(contextMenu.id); setContextMenu(null); }}
+            >
+              <Trash2 size={14} /> 删除会话
+            </button>
+          </div>
+        </>
       )}
 
       {settingsOpen && (
@@ -1102,25 +1091,27 @@ export default function App() {
       )}
 
       {profileContextMenu && (
-        <div
-          className="context-menu"
-          style={{ left: profileContextMenu.x, top: profileContextMenu.y }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button
-            className="context-menu-item danger"
-            onClick={() => {
-              if (profileContextMenu.kind === 'npc') {
-                void removeNpcDraft(profileContextMenu.id);
-              } else {
-                void removeAgentDraft(profileContextMenu.id);
-              }
-              setProfileContextMenu(null);
-            }}
+        <>
+          <div className="context-menu-backdrop" onClick={() => setProfileContextMenu(null)} />
+          <div
+            className="context-menu"
+            style={{ left: profileContextMenu.x, top: profileContextMenu.y }}
           >
-            <Trash2 size={14} /> 删除
-          </button>
-        </div>
+            <button
+              className="context-menu-item danger"
+              onClick={() => {
+                if (profileContextMenu.kind === 'npc') {
+                  void removeNpcDraft(profileContextMenu.id);
+                } else {
+                  void removeAgentDraft(profileContextMenu.id);
+                }
+                setProfileContextMenu(null);
+              }}
+            >
+              <Trash2 size={14} /> 删除
+            </button>
+          </div>
+        </>
       )}
 
       <section className="workspace">

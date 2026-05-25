@@ -177,14 +177,29 @@ button { border: 0; cursor: pointer; }
 .mode-tabs .selected { background: var(--md-primary); color: var(--md-on-primary); }
 
 select, input, textarea {
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 12px;
+  border: 1px solid var(--md-outline);
+  border-radius: 4px;
   background: var(--md-surface);
   color: var(--md-on-surface);
   outline: none;
 }
-select:focus, input:focus, textarea:focus { border-color: var(--md-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-primary) 20%, transparent); }
-select { height: 40px; padding: 0 12px; }
+select:focus, input:focus, textarea:focus { border-width: 2px; border-color: var(--md-primary); }
+input:focus, textarea:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-primary) 20%, transparent); }
+select:hover:not(:focus):not(:disabled) { border-color: var(--md-on-surface); }
+select {
+  height: 40px;
+  padding: 0 36px 0 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2349454f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+}
+:root[data-theme='dark'] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23cac4d0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+select:disabled { opacity: 0.38; cursor: not-allowed; }
 .icon-button { width: 40px; height: 40px; border-radius: 12px; background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
 .icon-button:hover, .tiny-button:hover, .upload-button:hover { background: var(--md-surface-container-highest); }
 .danger { color: var(--md-error); margin-left: auto; }
@@ -382,6 +397,12 @@ select { height: 40px; padding: 0 12px; }
   background: var(--md-surface-container-highest);
   border-radius: 999px;
   padding: 2px 7px;
+}
+
+.context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
 }
 
 .context-menu {

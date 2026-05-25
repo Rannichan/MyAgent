@@ -129,13 +129,17 @@ button { border: 0; cursor: pointer; }
 }
 .conversation:hover { background: var(--md-surface-container-highest); }
 .conversation.active { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.conv-info { display: grid; gap: 2px; min-width: 0; }
 .conversation span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 560; }
+.conv-role { font-style: normal; font-size: 12px; color: var(--md-on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation.active .conv-role { color: var(--md-on-primary-container); opacity: 0.75; }
 .conversation small {
   padding: 3px 8px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-primary) 14%, transparent);
   color: var(--md-primary);
   font-size: 12px;
+  align-self: start;
 }
 
 .workspace {
@@ -244,7 +248,8 @@ select { height: 40px; padding: 0 12px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 0;
   font-size: 12px;
   font-weight: 700;
   color: var(--md-on-surface-variant);
@@ -253,6 +258,16 @@ select { height: 40px; padding: 0 12px; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+}
+.part-preview {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  opacity: 0.75;
+  min-width: 0;
 }
 .part-toggle {
   width: 22px;
@@ -268,7 +283,14 @@ select { height: 40px; padding: 0 12px; }
 .part-toggle:hover { background: color-mix(in srgb, var(--md-on-surface) 10%, transparent); }
 .part-toggle svg { transition: transform 200ms ease; }
 .part-toggle .chevron-collapsed { transform: rotate(-90deg); }
-.part-collapsed { padding-bottom: 4px; }
+.part-collapsible {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 260ms ease;
+  overflow: hidden;
+}
+.part-collapsible-hidden { grid-template-rows: 0fr; }
+.part-collapsible-inner { overflow: hidden; min-height: 0; padding-top: 6px; }
 .reasoning-part {
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
@@ -427,11 +449,10 @@ select { height: 40px; padding: 0 12px; }
 }
 .npc-item {
   border-radius: 10px;
-  min-height: 36px;
   background: transparent;
   color: var(--md-on-surface);
   text-align: left;
-  padding: 0 10px;
+  padding: 5px 10px;
 }
 .npc-item:hover { background: var(--md-surface-container-highest); }
 .npc-item.active { background: var(--md-primary-container); color: var(--md-on-primary-container); }

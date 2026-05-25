@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Bot, Brain, Check, ChevronDown, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
@@ -251,6 +252,23 @@ function makeMessage(role: ChatMessage['role'], content: string, attachments: At
   };
 }
 
+function CollapsiblePart({ title, preview, collapsed, onToggle }: {
+  title: ReactNode;
+  preview: string;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="part-title">
+      <span className="part-title-label">{title}</span>
+      {collapsed && <span className="part-preview">{preview.slice(0, 80)}{preview.length > 80 ? '…' : ''}</span>}
+      <button className="part-toggle" type="button" onClick={onToggle}>
+        <ChevronDown size={14} className={collapsed ? 'chevron-collapsed' : ''} />
+      </button>
+    </div>
+  );
+}
+
 function MessageParts({ message }: { message: ChatMessage }) {
   const item = withMessageDefaults(message);
   const [reasoningCollapsed, setReasoningCollapsed] = useState(false);
@@ -263,25 +281,29 @@ function MessageParts({ message }: { message: ChatMessage }) {
   return (
     <div className="message-parts">
       {item.reasoning_content && (
-        <section className={`part reasoning-part${reasoningCollapsed ? ' part-collapsed' : ''}`}>
-          <div className="part-title">
-            <span className="part-title-label"><Brain size={15} /> 思考</span>
-            <button className="part-toggle" type="button" onClick={() => setReasoningCollapsed((v) => !v)}>
-              <ChevronDown size={14} className={reasoningCollapsed ? 'chevron-collapsed' : ''} />
-            </button>
+        <section className="part reasoning-part">
+          <CollapsiblePart
+            title={<><Brain size={15} /> 思考</>}
+            preview={item.reasoning_content}
+            collapsed={reasoningCollapsed}
+            onToggle={() => setReasoningCollapsed((v) => !v)}
+          />
+          <div className={`part-collapsible${reasoningCollapsed ? ' part-collapsible-hidden' : ''}`}>
+            <div className="part-collapsible-inner"><p>{item.reasoning_content}</p></div>
           </div>
-          {!reasoningCollapsed && <p>{item.reasoning_content}</p>}
         </section>
       )}
       {item.tool_calls.length > 0 && (
-        <section className={`part tool-part${toolsCollapsed ? ' part-collapsed' : ''}`}>
-          <div className="part-title">
-            <span className="part-title-label"><Wrench size={15} /> 工具调用</span>
-            <button className="part-toggle" type="button" onClick={() => setToolsCollapsed((v) => !v)}>
-              <ChevronDown size={14} className={toolsCollapsed ? 'chevron-collapsed' : ''} />
-            </button>
+        <section className="part tool-part">
+          <CollapsiblePart
+            title={<><Wrench size={15} /> 工具调用</>}
+            preview={JSON.stringify(item.tool_calls)}
+            collapsed={toolsCollapsed}
+            onToggle={() => setToolsCollapsed((v) => !v)}
+          />
+          <div className={`part-collapsible${toolsCollapsed ? ' part-collapsible-hidden' : ''}`}>
+            <div className="part-collapsible-inner"><pre>{JSON.stringify(item.tool_calls, null, 2)}</pre></div>
           </div>
-          {!toolsCollapsed && <pre>{JSON.stringify(item.tool_calls, null, 2)}</pre>}
         </section>
       )}
       <section className="part answer-part">
@@ -877,20 +899,29 @@ export default function App() {
           <MessageSquarePlus size={18} /> 新建会话
         </button>
         <div className="conversation-list">
-          {conversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              className={conversation.id === active?.id ? 'conversation active' : 'conversation'}
-              onClick={() => selectConversation(conversation)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, id: conversation.id });
-              }}
-            >
-              <span>{conversation.title}</span>
-              <small>{normalizeMode(conversation.mode) === 'agent' ? 'Agent' : 'NPC'}</small>
-            </button>
-          ))}
+          {conversations.map((conversation) => {
+            const convMode = normalizeMode(conversation.mode);
+            const roleName = convMode === 'npc'
+              ? (npcs.find((n) => n.id === conversation.npc_id)?.name ?? null)
+              : (agents.find((a) => a.id === conversation.agent_id)?.name ?? null);
+            return (
+              <button
+                key={conversation.id}
+                className={conversation.id === active?.id ? 'conversation active' : 'conversation'}
+                onClick={() => selectConversation(conversation)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, id: conversation.id });
+                }}
+              >
+                <div className="conv-info">
+                  <span>{conversation.title}</span>
+                  {roleName && <em className="conv-role">{roleName}</em>}
+                </div>
+                <small>{convMode === 'agent' ? 'Agent' : 'NPC'}</small>
+              </button>
+            );
+          })}
         </div>
       </aside>
 

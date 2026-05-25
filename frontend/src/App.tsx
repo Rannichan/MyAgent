@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
+import { Bot, Brain, Check, ChevronDown, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
 import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage } from './types';
@@ -253,6 +253,8 @@ function makeMessage(role: ChatMessage['role'], content: string, attachments: At
 
 function MessageParts({ message }: { message: ChatMessage }) {
   const item = withMessageDefaults(message);
+  const [reasoningCollapsed, setReasoningCollapsed] = useState(false);
+  const [toolsCollapsed, setToolsCollapsed] = useState(false);
 
   if (item.role === 'user') {
     return <p className="body-text">{item.content}</p>;
@@ -261,15 +263,25 @@ function MessageParts({ message }: { message: ChatMessage }) {
   return (
     <div className="message-parts">
       {item.reasoning_content && (
-        <section className="part reasoning-part">
-          <div className="part-title"><Brain size={15} /> 思考</div>
-          <p>{item.reasoning_content}</p>
+        <section className={`part reasoning-part${reasoningCollapsed ? ' part-collapsed' : ''}`}>
+          <div className="part-title">
+            <span className="part-title-label"><Brain size={15} /> 思考</span>
+            <button className="part-toggle" type="button" onClick={() => setReasoningCollapsed((v) => !v)}>
+              <ChevronDown size={14} className={reasoningCollapsed ? 'chevron-collapsed' : ''} />
+            </button>
+          </div>
+          {!reasoningCollapsed && <p>{item.reasoning_content}</p>}
         </section>
       )}
       {item.tool_calls.length > 0 && (
-        <section className="part tool-part">
-          <div className="part-title"><Wrench size={15} /> 工具调用</div>
-          <pre>{JSON.stringify(item.tool_calls, null, 2)}</pre>
+        <section className={`part tool-part${toolsCollapsed ? ' part-collapsed' : ''}`}>
+          <div className="part-title">
+            <span className="part-title-label"><Wrench size={15} /> 工具调用</span>
+            <button className="part-toggle" type="button" onClick={() => setToolsCollapsed((v) => !v)}>
+              <ChevronDown size={14} className={toolsCollapsed ? 'chevron-collapsed' : ''} />
+            </button>
+          </div>
+          {!toolsCollapsed && <pre>{JSON.stringify(item.tool_calls, null, 2)}</pre>}
         </section>
       )}
       <section className="part answer-part">
@@ -928,6 +940,9 @@ export default function App() {
                     {profile.name}
                   </button>
                 ))}
+                <button className="npc-item npc-item-add" type="button" onClick={startNewNpc}>
+                  <Plus size={14} /> 新建
+                </button>
               </aside>
               <section className="npc-form">
                 <label>
@@ -956,9 +971,6 @@ export default function App() {
                 </label>
                 {npcError && <div className="npc-error">{npcError}</div>}
                 <div className="npc-actions">
-                  <button className="tiny-action" type="button" onClick={startNewNpc}>
-                    <Plus size={14} /> 新建
-                  </button>
                   <button className="tiny-action" type="button" onClick={() => void saveNpcDraft()} disabled={npcSaving}>
                     <Save size={14} /> 保存
                   </button>
@@ -991,6 +1003,9 @@ export default function App() {
                     {profile.name}
                   </button>
                 ))}
+                <button className="npc-item npc-item-add" type="button" onClick={startNewAgent}>
+                  <Plus size={14} /> 新建
+                </button>
               </aside>
               <section className="npc-form">
                 <label>
@@ -1011,9 +1026,6 @@ export default function App() {
                 </label>
                 {agentError && <div className="npc-error">{agentError}</div>}
                 <div className="npc-actions">
-                  <button className="tiny-action" type="button" onClick={startNewAgent}>
-                    <Plus size={14} /> 新建
-                  </button>
                   <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
                     <Save size={14} /> 保存
                   </button>
@@ -1064,16 +1076,18 @@ export default function App() {
                     {item.role === 'user' && (
                       <button className="tiny-button" title="编辑并重新发送" onClick={() => { setEditingId(item.id); setDraftContent(item.content); }}><Pencil size={14} /></button>
                     )}
-                    {item.role === 'assistant' && latencyMap[item.id] != null && (
-                      <span className="latency">{latencyMap[item.id]} ms</span>
-                    )}
-                    {item.role === 'assistant' && usageMap[item.id] != null && (
-                      <span className="latency">↑{usageMap[item.id].prompt_tokens} ↓{usageMap[item.id].completion_tokens}</span>
-                    )}
                     {item.role === 'assistant' && (
-                      <button className="tiny-button" title="复制回复" onClick={() => void copyAssistantMessage(item)}>
-                        {copiedMessageId === item.id ? <Check size={14} /> : <Copy size={14} />}
-                      </button>
+                      <div className="message-meta">
+                        {latencyMap[item.id] != null && (
+                          <span className="latency">{latencyMap[item.id]} ms</span>
+                        )}
+                        {usageMap[item.id] != null && (
+                          <span className="latency">↑{usageMap[item.id].prompt_tokens} ↓{usageMap[item.id].completion_tokens}</span>
+                        )}
+                        <button className="tiny-button" title="复制回复" onClick={() => void copyAssistantMessage(item)}>
+                          {copiedMessageId === item.id ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
                     )}
                   </div>
                   {editingId === item.id ? (

@@ -231,6 +231,7 @@ select { height: 40px; padding: 0 12px; }
 .message.user .bubble { background: color-mix(in srgb, var(--md-tertiary-container) 60%, var(--md-surface)); }
 .message-actions { display: flex; align-items: center; gap: 8px; color: var(--md-on-surface-variant); margin-bottom: 8px; }
 .message-actions strong { color: var(--md-on-surface); }
+.message-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .tiny-button { width: 28px; height: 28px; border-radius: 10px; background: transparent; color: var(--md-on-surface-variant); }
 
 .message-parts { display: grid; gap: 10px; }
@@ -240,14 +241,34 @@ select { height: 40px; padding: 0 12px; }
   border: 1px solid transparent;
 }
 .part-title {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 700;
   color: var(--md-on-surface-variant);
 }
+.part-title-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.part-toggle {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.part-toggle:hover { background: color-mix(in srgb, var(--md-on-surface) 10%, transparent); }
+.part-toggle svg { transition: transform 200ms ease; }
+.part-toggle .chevron-collapsed { transform: rotate(-90deg); }
+.part-collapsed { padding-bottom: 4px; }
 .reasoning-part {
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
@@ -339,7 +360,6 @@ select { height: 40px; padding: 0 12px; }
   background: var(--md-surface-container-highest);
   border-radius: 999px;
   padding: 2px 7px;
-  margin-left: auto;
 }
 
 .context-menu {
@@ -415,6 +435,13 @@ select { height: 40px; padding: 0 12px; }
 }
 .npc-item:hover { background: var(--md-surface-container-highest); }
 .npc-item.active { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.npc-item-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--md-primary);
+  margin-top: 4px;
+}
 .npc-form {
   padding: 14px;
   overflow: auto;

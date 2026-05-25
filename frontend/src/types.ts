@@ -47,12 +47,21 @@ export interface NpcDraft {
 export interface AgentProfile {
   id: string;
   name: string;
+  system: string;
+  agent: string;
+  identity: string;
+  memory: string;
+  soul: string;
   system_prompt: string;
 }
 
 export interface AgentDraft {
   id: string;
-  system_prompt: string;
+  system: string;
+  agent: string;
+  identity: string;
+  memory: string;
+  soul: string;
 }
 
 export interface TokenUsage {

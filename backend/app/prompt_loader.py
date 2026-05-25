@@ -6,6 +6,8 @@ from pathlib import Path
 from .config import Settings
 from .schemas import AgentProfile, NpcProfile
 
+AGENT_PROMPT_FILENAMES = ("system.md", "agent.md", "identity.md", "memory.md", "soul.md")
+
 
 def _read_text(path: Path) -> str:
     if not path.exists() or not path.is_file():
@@ -88,6 +90,27 @@ def _agent_profiles_dir(settings: Settings) -> Path:
     return settings.agent_dir / "profiles"
 
 
+def _normalize_prompt_text(text: str | None) -> str:
+    return (text or "").strip()
+
+
+def _compose_agent_prompt(parts: dict[str, str]) -> str:
+    sections: list[str] = []
+    for filename in AGENT_PROMPT_FILENAMES:
+        stem = Path(filename).stem
+        text = _normalize_prompt_text(parts.get(stem))
+        if text:
+            sections.append(f"# {stem}\n{text}")
+    return "\n\n".join(sections)
+
+
+def _load_agent_prompt_parts(directory: Path) -> dict[str, str]:
+    return {
+        Path(filename).stem: _read_text(directory / filename)
+        for filename in AGENT_PROMPT_FILENAMES
+    }
+
+
 def load_agents(settings: Settings) -> list[AgentProfile]:
     directory = _agent_profiles_dir(settings)
     if not directory.exists():
@@ -96,13 +119,35 @@ def load_agents(settings: Settings) -> list[AgentProfile]:
     profiles: list[AgentProfile] = []
     for path in sorted(directory.iterdir()):
         if path.is_dir():
-            system_prompt = _read_text(path / "system.md") or _read_text(path / "prompt.md")
-            if system_prompt:
-                profiles.append(AgentProfile(id=path.name, name=path.name, system_prompt=system_prompt))
+            parts = _load_agent_prompt_parts(path)
+            system_prompt = _compose_agent_prompt(parts)
+            profiles.append(
+                AgentProfile(
+                    id=path.name,
+                    name=path.name,
+                    system=parts["system"],
+                    agent=parts["agent"],
+                    identity=parts["identity"],
+                    memory=parts["memory"],
+                    soul=parts["soul"],
+                    system_prompt=system_prompt,
+                )
+            )
         elif path.suffix.lower() == ".md":
             text = _read_text(path)
             if text:
-                profiles.append(AgentProfile(id=path.stem, name=path.stem, system_prompt=text))
+                profiles.append(
+                    AgentProfile(
+                        id=path.stem,
+                        name=path.stem,
+                        system=text,
+                        agent="",
+                        identity="",
+                        memory="",
+                        soul="",
+                        system_prompt=_compose_agent_prompt({"system": text}),
+                    )
+                )
     return profiles
 
 
@@ -112,15 +157,41 @@ def load_agent(settings: Settings, agent_id: str | None) -> AgentProfile | None:
     return next((profile for profile in load_agents(settings) if profile.id == agent_id), None)
 
 
-def save_agent(settings: Settings, agent_id: str, system_prompt: str) -> AgentProfile:
+def save_agent(
+    settings: Settings,
+    agent_id: str,
+    system: str = "",
+    agent: str = "",
+    identity: str = "",
+    memory: str = "",
+    soul: str = "",
+) -> AgentProfile:
     directory = _agent_profiles_dir(settings)
     target = directory / agent_id
     legacy_file = directory / f"{agent_id}.md"
     if legacy_file.exists() and legacy_file.is_file():
         legacy_file.unlink(missing_ok=True)
     target.mkdir(parents=True, exist_ok=True)
-    (target / "system.md").write_text(system_prompt.strip(), encoding="utf-8")
-    return AgentProfile(id=agent_id, name=agent_id, system_prompt=system_prompt.strip())
+    prompt_parts = {
+        "system": _normalize_prompt_text(system),
+        "agent": _normalize_prompt_text(agent),
+        "identity": _normalize_prompt_text(identity),
+        "memory": _normalize_prompt_text(memory),
+        "soul": _normalize_prompt_text(soul),
+    }
+    for filename in AGENT_PROMPT_FILENAMES:
+        stem = Path(filename).stem
+        (target / filename).write_text(prompt_parts[stem], encoding="utf-8")
+    return AgentProfile(
+        id=agent_id,
+        name=agent_id,
+        system=prompt_parts["system"],
+        agent=prompt_parts["agent"],
+        identity=prompt_parts["identity"],
+        memory=prompt_parts["memory"],
+        soul=prompt_parts["soul"],
+        system_prompt=_compose_agent_prompt(prompt_parts),
+    )
 
 
 def rename_agent(settings: Settings, old_id: str, new_id: str) -> None:
@@ -159,7 +230,7 @@ def load_agent_prompt(settings: Settings) -> str:
     if not settings.agent_dir.exists():
         return ""
 
-    preferred = ["soul.md", "identity.md", "agent.md", "memory.md"]
+    preferred = ["system.md", "soul.md", "identity.md", "agent.md", "memory.md"]
     parts: list[str] = []
     seen: set[Path] = set()
 

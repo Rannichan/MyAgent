@@ -110,14 +110,27 @@ class NpcUpdate(BaseModel):
 class AgentProfile(BaseModel):
     id: str
     name: str
+    system: str = ""
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""
     system_prompt: str
 
 
 class AgentCreate(BaseModel):
     id: str = Field(min_length=1, max_length=64)
-    system_prompt: str = Field(min_length=1)
+    system: str = ""
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""
 
 
 class AgentUpdate(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    system_prompt: str = Field(min_length=1)
+    system: str = ""
+    agent: str = ""
+    identity: str = ""
+    memory: str = ""
+    soul: str = ""

@@ -163,7 +163,16 @@ def read_agent_profile(agent_id: str | None = None, settings: Settings = Depends
         profile = load_agent(settings, validate_agent_id(agent_id))
         if profile:
             return profile.model_dump(mode="json")
-    return {"id": None, "name": "default", "system_prompt": load_agent_prompt(settings)}
+    return {
+        "id": None,
+        "name": "default",
+        "system": "",
+        "agent": "",
+        "identity": "",
+        "memory": "",
+        "soul": "",
+        "system_prompt": load_agent_prompt(settings),
+    }
 
 
 @app.get("/api/agents")
@@ -178,7 +187,15 @@ def create_agent(payload: AgentCreate, settings: Settings = Depends(get_settings
     legacy_target = settings.agent_dir / "profiles" / f"{agent_id}.md"
     if target.exists() or legacy_target.exists():
         raise HTTPException(status_code=409, detail="Agent already exists")
-    profile = save_agent(settings, agent_id, payload.system_prompt)
+    profile = save_agent(
+        settings,
+        agent_id,
+        system=payload.system,
+        agent=payload.agent,
+        identity=payload.identity,
+        memory=payload.memory,
+        soul=payload.soul,
+    )
     return profile.model_dump(mode="json")
 
 
@@ -198,7 +215,15 @@ def update_agent(agent_id: str, payload: AgentUpdate, settings: Settings = Depen
     legacy_source = settings.agent_dir / "profiles" / f"{profile_id}.md"
     if not source.exists() and not legacy_source.exists():
         raise HTTPException(status_code=404, detail="Agent not found")
-    profile = save_agent(settings, profile_id, payload.system_prompt)
+    profile = save_agent(
+        settings,
+        profile_id,
+        system=payload.system,
+        agent=payload.agent,
+        identity=payload.identity,
+        memory=payload.memory,
+        soul=payload.soul,
+    )
     return profile.model_dump(mode="json")
 
 

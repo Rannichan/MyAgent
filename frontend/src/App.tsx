@@ -15,7 +15,7 @@ type ThemeMode = 'light' | 'dark';
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
 const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '' };
-const emptyAgentDraft: AgentDraft = { id: '', system_prompt: '' };
+const emptyAgentDraft: AgentDraft = { id: '', system: '', agent: '', identity: '', memory: '', soul: '' };
 
 function safeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation';
@@ -461,7 +461,14 @@ export default function App() {
       const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
       if (initial) {
         setAgentEditingId(initial.id);
-        setAgentDraft({ id: initial.id, system_prompt: initial.system_prompt });
+        setAgentDraft({
+          id: initial.id,
+          system: initial.system,
+          agent: initial.agent,
+          identity: initial.identity,
+          memory: initial.memory,
+          soul: initial.soul
+        });
       } else {
         setAgentEditingId(null);
         setAgentDraft(emptyAgentDraft);
@@ -492,7 +499,11 @@ export default function App() {
     setAgentEditingId(profile.id);
     setAgentDraft({
       id: profile.id,
-      system_prompt: profile.system_prompt
+      system: profile.system,
+      agent: profile.agent,
+      identity: profile.identity,
+      memory: profile.memory,
+      soul: profile.soul
     });
     setAgentError('');
   }
@@ -685,33 +696,30 @@ export default function App() {
 
   async function saveAgentDraft() {
     const nextId = agentDraft.id.trim();
-    const prompt = agentDraft.system_prompt.trim();
     if (!nextId) {
       setAgentError('请填写 Agent 标识');
-      return;
-    }
-    if (!prompt) {
-      setAgentError('请填写 system prompt');
       return;
     }
 
     setAgentSaving(true);
     setAgentError('');
+    const payload = {
+      id: nextId,
+      system: agentDraft.system.trim(),
+      agent: agentDraft.agent.trim(),
+      identity: agentDraft.identity.trim(),
+      memory: agentDraft.memory.trim(),
+      soul: agentDraft.soul.trim()
+    };
     try {
       if (agentEditingId) {
-        await api.updateAgent(agentEditingId, {
-          id: nextId,
-          system_prompt: prompt
-        });
+        await api.updateAgent(agentEditingId, payload);
       } else {
-        await api.createAgent({
-          id: nextId,
-          system_prompt: prompt
-        });
+        await api.createAgent(payload);
       }
       await refreshAgents(nextId, !agentEditingId);
       setAgentEditingId(nextId);
-      setAgentDraft({ id: nextId, system_prompt: prompt });
+      setAgentDraft(payload);
     } catch (error) {
       setAgentError(`保存失败：${String(error)}`);
     } finally {
@@ -735,7 +743,11 @@ export default function App() {
         setAgentEditingId(profile.id);
         setAgentDraft({
           id: profile.id,
-          system_prompt: profile.system_prompt
+          system: profile.system,
+          agent: profile.agent,
+          identity: profile.identity,
+          memory: profile.memory,
+          soul: profile.soul
         });
       }
       if (mode === 'agent' && id === agentId) {
@@ -1098,11 +1110,43 @@ export default function App() {
                       />
                     </label>
                     <label>
-                      System Prompt
+                      system.md
                       <textarea
-                        value={agentDraft.system_prompt}
-                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
-                        rows={14}
+                        value={agentDraft.system}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, system: event.target.value }))}
+                        rows={6}
+                      />
+                    </label>
+                    <label>
+                      agent.md
+                      <textarea
+                        value={agentDraft.agent}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, agent: event.target.value }))}
+                        rows={6}
+                      />
+                    </label>
+                    <label>
+                      identity.md
+                      <textarea
+                        value={agentDraft.identity}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, identity: event.target.value }))}
+                        rows={6}
+                      />
+                    </label>
+                    <label>
+                      memory.md
+                      <textarea
+                        value={agentDraft.memory}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, memory: event.target.value }))}
+                        rows={6}
+                      />
+                    </label>
+                    <label>
+                      soul.md
+                      <textarea
+                        value={agentDraft.soul}
+                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, soul: event.target.value }))}
+                        rows={6}
                       />
                     </label>
                     {agentError && <div className="npc-error">{agentError}</div>}

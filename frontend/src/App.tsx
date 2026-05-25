@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Bot, Brain, Check, ChevronDown, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
-import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig } from './types';
+import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig, LlmConfig } from './types';
 
 type Sampling = {
   temperature: number;
@@ -350,7 +350,7 @@ export default function App() {
   const [profileContextMenu, setProfileContextMenu] = useState<{ x: number; y: number; id: string; kind: 'npc' | 'agent' } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'npc' | 'agent' | 'user'>('npc');
+  const [settingsTab, setSettingsTab] = useState<'npc' | 'agent' | 'user' | 'config'>('npc');
   const [npcEditingId, setNpcEditingId] = useState<string | null>(null);
   const [npcDraft, setNpcDraft] = useState<NpcDraft>(emptyNpcDraft);
   const [npcSaving, setNpcSaving] = useState(false);
@@ -362,6 +362,10 @@ export default function App() {
   const [userContent, setUserContent] = useState('');
   const [userSaving, setUserSaving] = useState(false);
   const [userError, setUserError] = useState<string>('');
+  const emptyLlmConfig: LlmConfig = { provider: 'vllm', model: '', vllm_base_url: '', vllm_api_key: '', llamacpp_base_url: '', llamacpp_api_key: '' };
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>(emptyLlmConfig);
+  const [llmConfigSaving, setLlmConfigSaving] = useState(false);
+  const [llmConfigError, setLlmConfigError] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -369,7 +373,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models(), api.user()]).then(([runtime, profiles, agentProfiles, items, models, userCfg]) => {
+    Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models(), api.user(), api.getLlmConfig()]).then(([runtime, profiles, agentProfiles, items, models, userCfg, llmCfg]) => {
       setConfig(runtime);
       applyNpcList(profiles, profiles[0]?.id ?? null);
       applyAgentList(agentProfiles, agentProfiles[0]?.id ?? null);
@@ -385,6 +389,7 @@ export default function App() {
       setThinking(runtime.defaults.thinking);
       setTools(runtime.defaults.tools);
       setUserContent((userCfg as UserConfig).content);
+      setLlmConfig(llmCfg as LlmConfig);
       if (items[0]) selectConversation(items[0]);
     });
   }, []);
@@ -449,7 +454,7 @@ export default function App() {
     applyAgentList(items, preferredId, appendPreferredToBottom);
   }
 
-  function openSettings(tab: 'npc' | 'agent' | 'user') {
+  function openSettings(tab: 'npc' | 'agent' | 'user' | 'config') {
     setSettingsTab(tab);
     if (tab === 'npc') {
       const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
@@ -1013,6 +1018,7 @@ export default function App() {
               <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => { setSettingsTab('npc'); setProfileContextMenu(null); }}>NPC 管理</button>
               <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => { setSettingsTab('agent'); setProfileContextMenu(null); }}>Agent 管理</button>
               <button type="button" className={settingsTab === 'user' ? 'selected' : ''} onClick={() => { setSettingsTab('user'); setProfileContextMenu(null); }}>User 管理</button>
+              <button type="button" className={settingsTab === 'config' ? 'selected' : ''} onClick={() => { setSettingsTab('config'); setProfileContextMenu(null); }}>配置</button>
             </div>
             {settingsTab === 'npc' && (
               <div className="npc-editor-body">
@@ -1153,9 +1159,9 @@ export default function App() {
               </div>
             )}
             {settingsTab === 'user' && (
-              <div className="npc-editor-body">
+              <div className="npc-editor-body" style={{ gridTemplateColumns: '1fr' }}>
                 <section className="npc-form" style={{ flex: 1 }}>
-                  <div className="npc-fields">
+                  <div className="npc-form-fields">
                     <label>
                       user.md（所有 Agent 共享）
                       <textarea
@@ -1179,6 +1185,86 @@ export default function App() {
                         }).catch((err: unknown) => {
                           setUserError(`保存失败：${String(err)}`);
                           setUserSaving(false);
+                        });
+                      }}
+                    >
+                      <Save size={14} /> 保存
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+            {settingsTab === 'config' && (
+              <div className="npc-editor-body" style={{ gridTemplateColumns: '1fr' }}>
+                <section className="npc-form">
+                  <div className="npc-form-fields">
+                    <label>
+                      提供商
+                      <select
+                        value={llmConfig.provider}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, provider: e.target.value })}
+                        style={{ height: 34, fontSize: 13 }}
+                      >
+                        <option value="vllm">vLLM</option>
+                        <option value="llamacpp">llama.cpp</option>
+                      </select>
+                    </label>
+                    <label>
+                      模型名称
+                      <input
+                        value={llmConfig.model}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
+                        placeholder="例如 Qwen3-8B"
+                      />
+                    </label>
+                    <label>
+                      vLLM URL
+                      <input
+                        value={llmConfig.vllm_base_url}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, vllm_base_url: e.target.value })}
+                        placeholder="http://127.0.0.1:8000/v1"
+                      />
+                    </label>
+                    <label>
+                      vLLM API Key
+                      <input
+                        value={llmConfig.vllm_api_key}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, vllm_api_key: e.target.value })}
+                        placeholder="EMPTY"
+                      />
+                    </label>
+                    <label>
+                      llama.cpp URL
+                      <input
+                        value={llmConfig.llamacpp_base_url}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, llamacpp_base_url: e.target.value })}
+                        placeholder="http://127.0.0.1:8080/v1"
+                      />
+                    </label>
+                    <label>
+                      llama.cpp API Key
+                      <input
+                        value={llmConfig.llamacpp_api_key}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, llamacpp_api_key: e.target.value })}
+                        placeholder="EMPTY"
+                      />
+                    </label>
+                    {llmConfigError && <div className="npc-error">{llmConfigError}</div>}
+                  </div>
+                  <div className="npc-actions">
+                    <button
+                      className="tiny-action"
+                      type="button"
+                      disabled={llmConfigSaving}
+                      onClick={() => {
+                        setLlmConfigSaving(true);
+                        setLlmConfigError('');
+                        api.saveLlmConfig(llmConfig).then((updated) => {
+                          setLlmConfig(updated);
+                          setLlmConfigSaving(false);
+                        }).catch((err: unknown) => {
+                          setLlmConfigError(`保存失败：${String(err)}`);
+                          setLlmConfigSaving(false);
                         });
                       }}
                     >

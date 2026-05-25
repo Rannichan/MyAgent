@@ -40,6 +40,7 @@ from .schemas import (
     ChatResponse,
     ConversationCreate,
     ConversationUpdate,
+    LlmConfig,
     NpcCreate,
     NpcUpdate,
     TokenUsage,
@@ -245,6 +246,65 @@ def read_user(settings: Settings = Depends(get_settings)) -> dict:
 def update_user(payload: UserConfig, settings: Settings = Depends(get_settings)) -> dict:
     content = save_user_prompt(settings, payload.content)
     return UserConfig(content=content).model_dump()
+
+
+def _update_env_file(root_dir: Path, updates: dict[str, str]) -> None:
+    env_file = root_dir / ".env"
+    lines: list[str] = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
+    written: set[str] = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}")
+                written.add(key)
+                continue
+        new_lines.append(line)
+    for key, value in updates.items():
+        if key not in written:
+            new_lines.append(f"{key}={value}")
+    env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
+@app.get("/api/llm-config")
+def read_llm_config(settings: Settings = Depends(get_settings)) -> dict:
+    return LlmConfig(
+        provider=settings.model_provider,
+        model=settings.model_name,
+        vllm_base_url=settings.vllm_base_url,
+        vllm_api_key=settings.vllm_api_key,
+        llamacpp_base_url=settings.llamacpp_base_url,
+        llamacpp_api_key=settings.llamacpp_api_key,
+    ).model_dump()
+
+
+@app.put("/api/llm-config")
+def update_llm_config(payload: LlmConfig, settings: Settings = Depends(get_settings)) -> dict:
+    if payload.provider not in ("vllm", "llamacpp"):
+        raise HTTPException(status_code=400, detail="provider must be 'vllm' or 'llamacpp'")
+    _update_env_file(
+        settings.root_dir,
+        {
+            "MODEL_PROVIDER": payload.provider,
+            "MODEL_NAME": payload.model,
+            "VLLM_BASE_URL": payload.vllm_base_url,
+            "VLLM_API_KEY": payload.vllm_api_key,
+            "LLAMACPP_BASE_URL": payload.llamacpp_base_url,
+            "LLAMACPP_API_KEY": payload.llamacpp_api_key,
+        },
+    )
+    get_settings.cache_clear()
+    updated = get_settings()
+    return LlmConfig(
+        provider=updated.model_provider,
+        model=updated.model_name,
+        vllm_base_url=updated.vllm_base_url,
+        vllm_api_key=updated.vllm_api_key,
+        llamacpp_base_url=updated.llamacpp_base_url,
+        llamacpp_api_key=updated.llamacpp_api_key,
+    ).model_dump()
 
 
 @app.get("/api/conversations")

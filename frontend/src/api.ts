@@ -1,4 +1,4 @@
-import type { AgentDraft, AgentProfile, Attachment, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, UserConfig } from './types';
+import type { AgentDraft, AgentProfile, Attachment, Conversation, LlmConfig, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, UserConfig } from './types';
 
 export const api = {
   async config(): Promise<RuntimeConfig> {
@@ -36,6 +36,12 @@ export const api = {
   },
   async saveUser(content: string): Promise<UserConfig> {
     return putJson('/api/user', { content });
+  },
+  async getLlmConfig(): Promise<LlmConfig> {
+    return getJson('/api/llm-config');
+  },
+  async saveLlmConfig(config: LlmConfig): Promise<LlmConfig> {
+    return putJson('/api/llm-config', config);
   },
   async conversations(): Promise<Conversation[]> {
     return getJson('/api/conversations');

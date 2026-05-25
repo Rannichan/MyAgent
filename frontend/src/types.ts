@@ -90,3 +90,12 @@ export interface RuntimeConfig {
     tools: boolean;
   };
 }
+
+export interface LlmConfig {
+  provider: string;
+  model: string;
+  vllm_base_url: string;
+  vllm_api_key: string;
+  llamacpp_base_url: string;
+  llamacpp_api_key: string;
+}

@@ -135,3 +135,12 @@ class AgentUpdate(BaseModel):
 
 class UserConfig(BaseModel):
     content: str = ""
+
+
+class LlmConfig(BaseModel):
+    provider: str = "vllm"
+    model: str = "local-model"
+    vllm_base_url: str = "http://127.0.0.1:8000/v1"
+    vllm_api_key: str = "EMPTY"
+    llamacpp_base_url: str = "http://127.0.0.1:8080/v1"
+    llamacpp_api_key: str = "EMPTY"

@@ -412,6 +412,11 @@ export default function App() {
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === agentId), [agentId, agents]);
 
+  function canCreateConversation(nextMode: Mode, nextNpcId = npcId, nextAgentId = agentId): boolean {
+    if (nextMode === 'npc') return !!nextNpcId && npcs.some((npc) => npc.id === nextNpcId);
+    return !!nextAgentId && agents.some((agent) => agent.id === nextAgentId);
+  }
+
   function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
     if (!id) return items;
     const index = items.findIndex((item) => item.id === id);
@@ -574,7 +579,8 @@ export default function App() {
     if (nextActive) selectConversation(nextActive);
   }
 
-  async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId) {
+  async function newConversation(nextMode = mode, nextNpcId = npcId, nextAgentId = agentId): Promise<Conversation | null> {
+    if (!canCreateConversation(nextMode, nextNpcId, nextAgentId)) return null;
     const conversation = await api.createConversation(
       nextMode,
       nextMode === 'npc' ? nextNpcId : null,
@@ -582,6 +588,7 @@ export default function App() {
     );
     setConversations((items) => [conversation, ...items]);
     selectConversation(conversation);
+    return conversation;
   }
 
   function findRecentConversationForRole(nextMode: Mode, nextRoleId: string): Conversation | undefined {
@@ -870,8 +877,9 @@ export default function App() {
 
     let conversation = active;
     if (!conversation) {
-      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null, mode === 'agent' ? agentId : null);
-      setConversations((items) => [conversation!, ...items]);
+      const created = await newConversation(mode, mode === 'npc' ? npcId : null, mode === 'agent' ? agentId : null);
+      if (!created) return;
+      conversation = created;
     }
 
     const content = message;
@@ -983,7 +991,7 @@ export default function App() {
             <span>{config ? `${config.provider} · ${selectedModel || config.model}` : '加载中'}</span>
           </div>
         </div>
-        <button className="primary-button" onClick={() => newConversation()}>
+        <button className="primary-button" disabled={!canCreateConversation(mode)} onClick={() => newConversation()}>
           <MessageSquarePlus size={18} /> 新建会话
         </button>
         <div className="conversation-list">
@@ -1452,7 +1460,7 @@ export default function App() {
                 event.currentTarget.form?.requestSubmit();
               }
             }} />
-            <button className="send-button" disabled={busy || !message.trim()} title="发送"><Send size={20} /></button>
+            <button className="send-button" disabled={busy || !message.trim() || (!active && !canCreateConversation(mode))} title="发送"><Send size={20} /></button>
             {attachments.length > 0 && <div className="pending-files">{attachments.map((file) => <span key={file.id}>{file.name}</span>)}</div>}
           </form>
         </div>

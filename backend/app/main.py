@@ -329,12 +329,20 @@ def append_npc_opening_message(
     store.append(conversation, ChatMessage(id=new_id(), role="assistant", content=opening))
 
 
+def validate_conversation_role(mode: str, npc_id: str | None, agent_id: str | None) -> None:
+    if mode == "npc" and not npc_id:
+        raise HTTPException(status_code=400, detail="npc_id is required for npc mode")
+    if mode == "agent" and not agent_id:
+        raise HTTPException(status_code=400, detail="agent_id is required for agent mode")
+
+
 @app.post("/api/conversations")
 def create_conversation(
     payload: ConversationCreate,
     store: ConversationStore = Depends(get_store),
     settings: Settings = Depends(get_settings),
 ) -> dict:
+    validate_conversation_role(payload.mode, payload.npc_id, payload.agent_id)
     conversation = store.create(payload)
     append_npc_opening_message(conversation, payload.mode, payload.npc_id, settings, store)
     return conversation.model_dump(mode="json")
@@ -392,6 +400,7 @@ def _prepare_chat(payload: ChatRequest, settings: Settings, store: ConversationS
         conversation.npc_id = payload.npc_id
         conversation.agent_id = payload.agent_id
     else:
+        validate_conversation_role(payload.mode, payload.npc_id, payload.agent_id)
         conversation = store.create(ConversationCreate(mode=payload.mode, npc_id=payload.npc_id, agent_id=payload.agent_id))
         append_npc_opening_message(conversation, payload.mode, payload.npc_id, settings, store)
 

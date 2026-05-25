@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from .config import Settings
-from .schemas import Attachment, ChatMessage, SamplingSettings
+from .schemas import Attachment, ChatMessage, SamplingSettings, TokenUsage
 
 
 def _message_content(text: str, attachments: list[Attachment]) -> Any:
@@ -66,6 +66,9 @@ def build_payload(
         payload["presence_penalty"] = sampling.presence_penalty
     if sampling.frequency_penalty is not None:
         payload["frequency_penalty"] = sampling.frequency_penalty
+
+    if stream:
+        payload["stream_options"] = {"include_usage": True}
 
     if settings.model_provider == "vllm":
         payload["chat_template_kwargs"] = {"enable_thinking": thinking_enabled}

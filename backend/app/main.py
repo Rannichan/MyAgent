@@ -40,6 +40,7 @@ from .schemas import (
     ConversationUpdate,
     NpcCreate,
     NpcUpdate,
+    TokenUsage,
 )
 from .storage import ConversationStore, new_id
 
@@ -304,11 +305,14 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
             reasoning_parts: list[str] = []
             tool_calls: list[dict] = []
             in_thinking_block = False
+            usage_data: dict | None = None
             start_time = time.time()
             try:
                 async for chunk in client.stream(request_payload):
                     if chunk.get("done"):
                         break
+                    if chunk.get("usage"):
+                        usage_data = chunk["usage"]
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
                     reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning") or ""
                     if reasoning_delta:
@@ -355,7 +359,8 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
                 )
                 store.append(conversation, assistant_message)
                 latency_ms = int((time.time() - start_time) * 1000)
-                yield f"data: {json.dumps({'type': 'done', 'conversation': conversation.model_dump(mode='json'), 'assistant_message': assistant_message.model_dump(mode='json'), 'raw_tool_calls': tool_calls, 'latency_ms': latency_ms}, ensure_ascii=False)}\n\n"
+                usage = TokenUsage(**usage_data) if usage_data else None
+                yield f"data: {json.dumps({'type': 'done', 'conversation': conversation.model_dump(mode='json'), 'assistant_message': assistant_message.model_dump(mode='json'), 'raw_tool_calls': tool_calls, 'latency_ms': latency_ms, 'usage': usage.model_dump() if usage else None}, ensure_ascii=False)}\n\n"
             except Exception as exc:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 
@@ -377,11 +382,14 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
         created_at=datetime.utcnow(),
     )
     store.append(conversation, assistant_message)
+    raw_usage = response.get("usage")
+    usage = TokenUsage(**raw_usage) if raw_usage else None
     return ChatResponse(
         conversation=conversation,
         assistant_message=assistant_message,
         raw_tool_calls=message.get("tool_calls") or [],
         latency_ms=latency_ms,
+        usage=usage,
     ).model_dump(mode="json")
 
 

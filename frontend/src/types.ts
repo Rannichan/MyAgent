@@ -53,6 +53,12 @@ export interface AgentDraft {
   system_prompt: string;
 }
 
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 export interface ModelInfo {
   id: string;
   object?: string;

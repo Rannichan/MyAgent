@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
-import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
+import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage } from './types';
 
 type Sampling = {
   temperature: number;
@@ -28,6 +28,175 @@ function renderMarkdown(content: string): string {
   return marked.parse(escaped, { gfm: true, breaks: true }) as string;
 }
 
+function fillRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string) {
+  const cr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + cr, y);
+  ctx.lineTo(x + w - cr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + cr);
+  ctx.lineTo(x + w, y + h - cr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - cr, y + h);
+  ctx.lineTo(x + cr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - cr);
+  ctx.lineTo(x, y + cr);
+  ctx.quadraticCurveTo(x, y, x + cr, y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+async function conversationToImageBlob(conversation: Conversation, assistantName: string, isDark: boolean): Promise<Blob> {
+  const scale = 2;
+  const logicalWidth = 860;
+  const W = logicalWidth * scale;
+  const pad = 40 * scale;
+  const msgGap = 20 * scale;
+  const avatarSz = 40 * scale;
+  const avatarR = 12 * scale;
+  const avatarGap = 12 * scale;
+  const bPad = 14 * scale;
+  const bRadius = 16 * scale;
+  const bubbleMaxW = W - pad * 2 - avatarSz - avatarGap;
+  const fs = 15 * scale;
+  const lh = Math.round(fs * 1.65);
+  const nameFs = 13 * scale;
+  const nameLh = nameFs + 8 * scale;
+  const titleFs = 20 * scale;
+  const subFs = 13 * scale;
+
+  const clr = isDark
+    ? {
+        bg: '#141218',
+        surfaceContainer: '#211f26',
+        onSurface: '#e6e1e5',
+        onSurfaceVar: '#cac4d0',
+        userBubble: 'rgba(99,59,72,0.55)',
+        asstBubble: '#2b2930',
+        userAvatarBg: '#633b48',
+        asstAvatarBg: '#4d3d75',
+        userNameClr: '#ffb3c1',
+        asstNameClr: '#cfbcff',
+        outline: '#49454f',
+      }
+    : {
+        bg: '#ece6f0',
+        surfaceContainer: '#f3edf7',
+        onSurface: '#1c1b1f',
+        onSurfaceVar: '#49454f',
+        userBubble: 'rgba(255,216,228,0.65)',
+        asstBubble: '#fdfbff',
+        userAvatarBg: '#ffd8e4',
+        asstAvatarBg: '#e9ddff',
+        userNameClr: '#8b2d47',
+        asstNameClr: '#4d3d75',
+        outline: '#cac4d0',
+      };
+
+  // Measure pass
+  const draft = document.createElement('canvas');
+  draft.width = W;
+  draft.height = 100;
+  const dCtx = draft.getContext('2d')!;
+  dCtx.font = `${fs}px "Segoe UI", Roboto, sans-serif`;
+
+  type Block = { isUser: boolean; name: string; lines: string[]; bubbleH: number };
+  const blocks: Block[] = [];
+
+  const visibleMessages = conversation.messages.filter(
+    (m) => withMessageDefaults(m).role !== 'system' && withMessageDefaults(m).role !== 'tool'
+  );
+
+  for (const msg of visibleMessages) {
+    const item = withMessageDefaults(msg);
+    const isUser = item.role === 'user';
+    const name = isUser ? '你' : assistantName;
+    const parts: string[] = [];
+    if (item.reasoning_content.trim()) parts.push(`[思考]\n${item.reasoning_content.trim()}`);
+    if (item.tool_calls.length > 0) parts.push(`[工具调用]\n${JSON.stringify(item.tool_calls, null, 2)}`);
+    parts.push(item.content || '（空）');
+    if (item.attachments.length > 0) {
+      const names = item.attachments
+        .map((f) => `${f.kind === 'image' ? '图片' : f.kind === 'video' ? '视频' : '文件'}: ${f.name}`)
+        .join('\n');
+      parts.push(`[附件]\n${names}`);
+    }
+    dCtx.font = `${fs}px "Segoe UI", Roboto, sans-serif`;
+    const lines = wrapTextLines(dCtx, parts.join('\n\n'), bubbleMaxW - bPad * 2);
+    const bubbleH = Math.max(avatarSz, nameLh + lines.length * lh + bPad * 2);
+    blocks.push({ isUser, name, lines, bubbleH });
+  }
+
+  const headerH = pad + titleFs + 8 * scale + subFs + 28 * scale;
+  const totalH = headerH + blocks.reduce((sum, b) => sum + b.bubbleH + msgGap, 0) + pad;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = Math.max(600 * scale, totalH);
+  const ctx = canvas.getContext('2d')!;
+
+  // Background
+  ctx.fillStyle = clr.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Header
+  let y = pad;
+  ctx.font = `700 ${titleFs}px "Segoe UI", Roboto, sans-serif`;
+  ctx.fillStyle = clr.onSurface;
+  ctx.fillText(conversation.title, pad, y + titleFs);
+  y += titleFs + 8 * scale;
+  ctx.font = `${subFs}px "Segoe UI", Roboto, sans-serif`;
+  ctx.fillStyle = clr.onSurfaceVar;
+  ctx.fillText(
+    `${normalizeMode(conversation.mode) === 'npc' ? 'NPC' : 'Agent'} · ${assistantName} · ${visibleMessages.length} 条消息`,
+    pad,
+    y + subFs
+  );
+  y += subFs + 28 * scale;
+
+  // Messages
+  for (const block of blocks) {
+    const avatarX = block.isUser ? W - pad - avatarSz : pad;
+    const bubbleX = block.isUser ? W - pad - avatarSz - avatarGap - bubbleMaxW : pad + avatarSz + avatarGap;
+
+    // Avatar circle
+    fillRoundRect(ctx, avatarX, y, avatarSz, avatarSz, avatarR, block.isUser ? clr.userAvatarBg : clr.asstAvatarBg);
+
+    // Avatar letter
+    ctx.font = `600 ${Math.round(avatarSz * 0.42)}px "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = isDark ? '#ffffff' : '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(block.name.charAt(0), avatarX + avatarSz / 2, y + avatarSz / 2 + Math.round(avatarSz * 0.15));
+    ctx.textAlign = 'left';
+
+    // Bubble
+    fillRoundRect(ctx, bubbleX, y, bubbleMaxW, block.bubbleH, bRadius, block.isUser ? clr.userBubble : clr.asstBubble);
+
+    // Name
+    const textX = bubbleX + bPad;
+    let textY = y + bPad;
+    ctx.font = `600 ${nameFs}px "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = block.isUser ? clr.userNameClr : clr.asstNameClr;
+    ctx.fillText(block.name, textX, textY + nameFs);
+    textY += nameLh;
+
+    // Content lines
+    ctx.font = `${fs}px "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = clr.onSurface;
+    for (const line of block.lines) {
+      textY += lh;
+      ctx.fillText(line || ' ', textX, textY);
+    }
+
+    y += block.bubbleH + msgGap;
+  }
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('图片导出失败'));
+    }, 'image/png');
+  });
+}
 function wrapTextLines(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = [];
   for (const paragraph of text.split('\n')) {
@@ -48,74 +217,6 @@ function wrapTextLines(context: CanvasRenderingContext2D, text: string, maxWidth
     lines.push(current);
   }
   return lines;
-}
-
-async function conversationToImageBlob(conversation: Conversation, assistantName: string): Promise<Blob> {
-  const width = 1200;
-  const padding = 52;
-  const contentWidth = width - padding * 2;
-  const lineHeight = 34;
-  const roleGap = 18;
-  const bottomPadding = 60;
-
-  const draft = document.createElement('canvas');
-  const draftCtx = draft.getContext('2d');
-  if (!draftCtx) throw new Error('无法生成图片');
-  draftCtx.font = '24px "Segoe UI", sans-serif';
-
-  let totalLines = 3;
-  const blocks = conversation.messages.map((message) => {
-    const role = message.role === 'user' ? '你' : assistantName;
-    const parts: string[] = [];
-    if (message.reasoning_content.trim()) parts.push(`思考: ${message.reasoning_content.trim()}`);
-    if (message.tool_calls.length > 0) parts.push(`工具调用: ${JSON.stringify(message.tool_calls)}`);
-    parts.push(message.content || '（空）');
-    if (message.attachments.length > 0) {
-      const names = message.attachments.map((file) => `${file.kind === 'image' ? '图片' : file.kind === 'video' ? '视频' : '文件'}:${file.name}`).join('，');
-      parts.push(`附件: ${names}`);
-    }
-    const lines = wrapTextLines(draftCtx, parts.join('\n'), contentWidth - 8);
-    totalLines += lines.length + 1;
-    return { role, lines, isUser: message.role === 'user' };
-  });
-
-  const height = Math.max(720, padding * 2 + totalLines * lineHeight + blocks.length * roleGap + bottomPadding);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('无法生成图片');
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = '#111827';
-  ctx.font = '700 36px "Segoe UI", sans-serif';
-  ctx.fillText(conversation.title, padding, padding);
-  ctx.font = '500 20px "Segoe UI", sans-serif';
-  ctx.fillStyle = '#6b7280';
-  ctx.fillText(`模式: ${conversation.mode === 'npc' ? 'NPC' : 'Agent'} · 消息数: ${conversation.messages.length}`, padding, padding + 42);
-
-  let y = padding + 90;
-  blocks.forEach((block) => {
-    ctx.font = '600 24px "Segoe UI", sans-serif';
-    ctx.fillStyle = block.isUser ? '#0f766e' : '#4338ca';
-    ctx.fillText(block.role, padding, y);
-    y += roleGap;
-    ctx.font = '400 24px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#111827';
-    block.lines.forEach((line) => {
-      ctx.fillText(line || ' ', padding, y);
-      y += lineHeight;
-    });
-    y += 10;
-  });
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('图片导出失败'));
-    }, 'image/png');
-  });
 }
 
 function resolveInitialTheme(): ThemeMode {
@@ -201,6 +302,7 @@ export default function App() {
   const [draftContent, setDraftContent] = useState('');
   const [theme, setTheme] = useState<ThemeMode>(resolveInitialTheme);
   const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
+  const [usageMap, setUsageMap] = useState<Record<string, TokenUsage>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [npcEditorOpen, setNpcEditorOpen] = useState(false);
@@ -383,7 +485,12 @@ export default function App() {
   async function switchMode(nextMode: Mode) {
     if (nextMode === mode) return;
     setMode(nextMode);
-    await newConversation(nextMode);
+    const recent = conversations.find((c) => normalizeMode(c.mode) === nextMode);
+    if (recent) {
+      selectConversation(recent);
+    } else {
+      await newConversation(nextMode);
+    }
   }
 
   async function removeConversation(id: string) {
@@ -427,7 +534,7 @@ export default function App() {
     const npcName = npcs.find((npc) => npc.id === conversation.npc_id)?.name;
     const agentName = agents.find((agent) => agent.id === conversation.agent_id)?.name;
     const assistantName = normalizeMode(conversation.mode) === 'npc' ? (npcName || 'NPC') : (agentName || 'Agent');
-    const blob = await conversationToImageBlob(conversation, assistantName);
+    const blob = await conversationToImageBlob(conversation, assistantName, theme === 'dark');
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -624,6 +731,9 @@ export default function App() {
         if (data.latency_ms != null && data.assistant_message?.id) {
           setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
         }
+        if (data.usage != null && data.assistant_message?.id) {
+          setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
+        }
       }
       await refreshConversations(conversationToUse.id);
     } catch (error) {
@@ -700,6 +810,9 @@ export default function App() {
           selectConversation(data.conversation);
           if (data.latency_ms != null && data.assistant_message?.id) {
             setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
+          }
+          if (data.usage != null && data.assistant_message?.id) {
+            setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
           }
         }
         if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
@@ -953,6 +1066,9 @@ export default function App() {
                     )}
                     {item.role === 'assistant' && latencyMap[item.id] != null && (
                       <span className="latency">{latencyMap[item.id]} ms</span>
+                    )}
+                    {item.role === 'assistant' && usageMap[item.id] != null && (
+                      <span className="latency">↑{usageMap[item.id].prompt_tokens} ↓{usageMap[item.id].completion_tokens}</span>
                     )}
                     {item.role === 'assistant' && (
                       <button className="tiny-button" title="复制回复" onClick={() => void copyAssistantMessage(item)}>

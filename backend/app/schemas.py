@@ -72,11 +72,18 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
 
 
+class TokenUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
 class ChatResponse(BaseModel):
     conversation: Conversation
     assistant_message: ChatMessage
     raw_tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     latency_ms: Optional[int] = None
+    usage: Optional[TokenUsage] = None
 
 
 class NpcProfile(BaseModel):

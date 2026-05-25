@@ -269,10 +269,17 @@ function CollapsiblePart({ title, preview, collapsed, onToggle }: {
   );
 }
 
-function MessageParts({ message }: { message: ChatMessage }) {
+function MessageParts({ message, autoCollapseDetails = false }: { message: ChatMessage; autoCollapseDetails?: boolean }) {
   const item = withMessageDefaults(message);
-  const [reasoningCollapsed, setReasoningCollapsed] = useState(false);
-  const [toolsCollapsed, setToolsCollapsed] = useState(false);
+  const [reasoningCollapsed, setReasoningCollapsed] = useState(autoCollapseDetails);
+  const [toolsCollapsed, setToolsCollapsed] = useState(autoCollapseDetails);
+
+  useEffect(() => {
+    if (autoCollapseDetails) {
+      setReasoningCollapsed(true);
+      setToolsCollapsed(true);
+    }
+  }, [autoCollapseDetails]);
 
   if (item.role === 'user') {
     return <p className="body-text">{item.content}</p>;
@@ -350,6 +357,10 @@ export default function App() {
   const [agentSaving, setAgentSaving] = useState(false);
   const [agentError, setAgentError] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const latestAssistantMessageId = useMemo(
+    () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
+    [active?.messages]
+  );
 
   useEffect(() => {
     Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models()]).then(([runtime, profiles, agentProfiles, items, models]) => {
@@ -961,19 +972,23 @@ export default function App() {
             </div>
             <div className="npc-editor-body">
               <aside className="npc-list">
-                {npcs.map((profile) => (
-                  <button
-                    type="button"
-                    key={profile.id}
-                    className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
-                    onClick={() => selectNpcForEdit(profile)}
-                  >
-                    {profile.name}
+                <div className="npc-list-scroll">
+                  {npcs.map((profile) => (
+                    <button
+                      type="button"
+                      key={profile.id}
+                      className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                      onClick={() => selectNpcForEdit(profile)}
+                    >
+                      {profile.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="npc-list-footer">
+                  <button className="npc-item npc-item-add" type="button" onClick={startNewNpc}>
+                    <Plus size={14} /> 新建
                   </button>
-                ))}
-                <button className="npc-item npc-item-add" type="button" onClick={startNewNpc}>
-                  <Plus size={14} /> 新建
-                </button>
+                </div>
               </aside>
               <section className="npc-form">
                 <label>
@@ -1024,19 +1039,23 @@ export default function App() {
             </div>
             <div className="npc-editor-body">
               <aside className="npc-list">
-                {agents.map((profile) => (
-                  <button
-                    type="button"
-                    key={profile.id}
-                    className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
-                    onClick={() => selectAgentForEdit(profile)}
-                  >
-                    {profile.name}
+                <div className="npc-list-scroll">
+                  {agents.map((profile) => (
+                    <button
+                      type="button"
+                      key={profile.id}
+                      className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                      onClick={() => selectAgentForEdit(profile)}
+                    >
+                      {profile.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="npc-list-footer">
+                  <button className="npc-item npc-item-add" type="button" onClick={startNewAgent}>
+                    <Plus size={14} /> 新建
                   </button>
-                ))}
-                <button className="npc-item npc-item-add" type="button" onClick={startNewAgent}>
-                  <Plus size={14} /> 新建
-                </button>
+                </div>
               </aside>
               <section className="npc-form">
                 <label>
@@ -1127,7 +1146,10 @@ export default function App() {
                       <button className="tiny-button" title="发送" onClick={() => resendEditedMessage(item.id)}><Send size={14} /></button>
                     </div>
                   ) : (
-                    <MessageParts message={item} />
+                    <MessageParts
+                      message={item}
+                      autoCollapseDetails={item.role === 'assistant' && item.id !== latestAssistantMessageId}
+                    />
                   )}
                   {item.attachments.length > 0 && (
                     <div className="attachments">

@@ -442,7 +442,7 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
                         break
                     if chunk.get("usage"):
                         usage_data = chunk["usage"]
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    delta = (chunk.get("choices") or [{}])[0].get("delta", {})
                     reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning") or ""
                     if reasoning_delta:
                         reasoning_parts.append(reasoning_delta)

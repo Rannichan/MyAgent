@@ -328,79 +328,6 @@ function MessageParts({ message, autoCollapseDetails = false }: { message: ChatM
   );
 }
 
-type VSelectOption = { value: string; label: string };
-
-interface VSelectProps {
-  value: string;
-  options: VSelectOption[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-  className?: string;
-  style?: React.CSSProperties;
-}
-
-function VSelect({ value, options, onChange, disabled, placeholder, className, style }: VSelectProps) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
-
-  function handleOpen() {
-    if (disabled) return;
-    setOpen(true);
-  }
-
-  return (
-    <div className={`v-select${className ? ` ${className}` : ''}`} style={style}>
-      <button
-        type="button"
-        disabled={disabled}
-        className={`v-select-trigger${value ? ' has-value' : ''}`}
-        onClick={handleOpen}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        {value && <Check size={16} className="v-select-check" />}
-        <span className="v-select-label">{selected?.label ?? placeholder ?? ''}</span>
-        <ChevronDown size={18} className="v-select-arrow" />
-      </button>
-      {open && (
-        <>
-          <div className="context-menu-backdrop" onClick={() => setOpen(false)} />
-          <div
-            className="context-menu v-select-menu"
-            role="listbox"
-          >
-            {placeholder && (
-              <button
-                type="button"
-                role="option"
-                aria-selected={!value}
-                className={`context-menu-item v-select-item${!value ? ' v-select-item-selected' : ''}`}
-                onClick={() => { onChange(''); setOpen(false); }}
-              >
-                <span className="v-select-item-check">{!value && <Check size={14} />}</span>
-                {placeholder}
-              </button>
-            )}
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                aria-selected={opt.value === value}
-                className={`context-menu-item v-select-item${opt.value === value ? ' v-select-item-selected' : ''}`}
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-              >
-                <span className="v-select-item-check">{opt.value === value && <Check size={14} />}</span>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 export default function App() {
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
@@ -1372,12 +1299,14 @@ export default function App() {
                   <div className="npc-form-fields">
                     <label>
                       提供商
-                      <VSelect
+                      <select
                         value={llmConfig.provider}
-                        options={[{ value: 'vllm', label: 'vLLM' }, { value: 'llamacpp', label: 'llama.cpp' }]}
-                        onChange={(v) => setLlmConfig({ ...llmConfig, provider: v })}
+                        onChange={(e) => setLlmConfig({ ...llmConfig, provider: e.target.value })}
                         style={{ height: 34, fontSize: 13 }}
-                      />
+                      >
+                        <option value="vllm">vLLM</option>
+                        <option value="llamacpp">llama.cpp</option>
+                      </select>
                     </label>
                     <label>
                       URL
@@ -1481,13 +1410,16 @@ export default function App() {
               <button key={item} className={mode === item ? 'selected' : ''} onClick={() => void switchMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>
             ))}
           </div>
-          <VSelect
+          <select
             value={mode === 'npc' ? npcId : agentId}
             disabled={mode === 'npc' ? npcs.length === 0 : agents.length === 0}
-            onChange={(v) => { void onRoleChange(v); }}
-            placeholder={mode === 'npc' ? '选择 NPC' : '选择 Agent'}
-            options={(mode === 'npc' ? npcs : agents).map((profile) => ({ value: profile.id, label: profile.name }))}
-          />
+            onChange={(e) => { void onRoleChange(e.target.value); }}
+          >
+            <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
+            {(mode === 'npc' ? npcs : agents).map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.name}</option>
+            ))}
+          </select>
           <button className="icon-button topbar-action-start" type="button" title="管理设置" onClick={() => openSettings(mode)}>
             <Settings size={18} />
           </button>
@@ -1561,14 +1493,18 @@ export default function App() {
           <section className="settings-bar">
             <div className="settings-title"><Settings size={16} /> 参数</div>
             <label>模型
-              <VSelect
+              <select
                 value={selectedModel}
-                onChange={(v) => setSelectedModel(v)}
+                onChange={(e) => setSelectedModel(e.target.value)}
                 style={{ height: 34, fontSize: 13 }}
-                options={modelList.length === 0
+              >
+                {(modelList.length === 0
                   ? (selectedModel ? [{ value: selectedModel, label: selectedModel }] : [])
-                  : modelList.map((m) => ({ value: m.id, label: m.id }))}
-              />
+                  : modelList.map((m) => ({ value: m.id, label: m.id }))
+                ).map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </label>
             <label>温度 <input type="number" min="0" max="2" step="0.1" value={sampling.temperature} onChange={(event) => setSampling({ ...sampling, temperature: Number(event.target.value) })} /></label>
             <label>Top P <input type="number" min="0" max="1" step="0.05" value={sampling.top_p} onChange={(event) => setSampling({ ...sampling, top_p: Number(event.target.value) })} /></label>

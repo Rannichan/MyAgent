@@ -119,14 +119,12 @@ button { border: 0; cursor: pointer; }
 
 .toast {
   position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
+  transform: translate(0, 0);
   background: var(--md-on-surface);
   color: var(--md-surface);
-  padding: 10px 20px;
+  padding: 8px 12px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   z-index: 9999;
   box-shadow: var(--md-elevation-2);

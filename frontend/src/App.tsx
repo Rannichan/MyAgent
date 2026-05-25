@@ -369,7 +369,7 @@ export default function App() {
   const [llmConfigSaving, setLlmConfigSaving] = useState(false);
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
-  const [toast, setToast] = useState<string>('');
+  const [toast, setToast] = useState<{ text: string; x: number; y: number } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
@@ -419,10 +419,14 @@ export default function App() {
     return !!nextAgentId && agents.some((agent) => agent.id === nextAgentId);
   }
 
-  function showToast(msg: string) {
-    setToast(msg);
+  function showToast(msg: string, pointer?: { x: number; y: number }) {
+    const fallbackX = Math.max(20, Math.min(window.innerWidth - 20, Math.floor(window.innerWidth / 2)));
+    const fallbackY = Math.max(20, Math.min(window.innerHeight - 20, window.innerHeight - 56));
+    const x = pointer ? Math.max(20, Math.min(window.innerWidth - 20, pointer.x + 12)) : fallbackX;
+    const y = pointer ? Math.max(20, Math.min(window.innerHeight - 20, pointer.y + 12)) : fallbackY;
+    setToast({ text: msg, x, y });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(''), 3000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
   }
 
   function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
@@ -623,17 +627,29 @@ export default function App() {
   async function switchMode(nextMode: Mode) {
     if (nextMode === mode) return;
     setMode(nextMode);
-    const nextRoleId = nextMode === 'npc' ? npcId : agentId;
-    await switchToRoleConversation(nextMode, nextRoleId);
+    setActive(null);
+    if (nextMode === 'npc') {
+      setNpcId('');
+      return;
+    }
+    setAgentId('');
   }
 
   async function onRoleChange(nextRoleId: string) {
     if (mode === 'npc') {
       setNpcId(nextRoleId);
+      if (!nextRoleId) {
+        setActive(null);
+        return;
+      }
       await switchToRoleConversation('npc', nextRoleId);
       return;
     }
     setAgentId(nextRoleId);
+    if (!nextRoleId) {
+      setActive(null);
+      return;
+    }
     await switchToRoleConversation('agent', nextRoleId);
   }
 
@@ -1001,9 +1017,9 @@ export default function App() {
         </div>
         <button
             className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
-            onClick={() => {
+            onClick={(event) => {
               if (!canCreateConversation(mode)) {
-                showToast('请先选择一个NPC或者Agent');
+                showToast('请先选择一个NPC或者Agent', { x: event.clientX, y: event.clientY });
               } else {
                 newConversation();
               }
@@ -1482,7 +1498,7 @@ export default function App() {
           </form>
         </div>
       </section>
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" style={{ left: toast.x, top: toast.y }}>{toast.text}</div>}
     </main>
   );
 }

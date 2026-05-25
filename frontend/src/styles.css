@@ -267,6 +267,30 @@ select { height: 40px; padding: 0 12px; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content p { margin: 0 0 10px; }
+.markdown-content pre {
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 10px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--md-surface-container-highest) 65%, transparent);
+}
+.markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+.markdown-content blockquote {
+  margin: 10px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--md-outline);
+  color: var(--md-on-surface-variant);
+}
+.markdown-content ul, .markdown-content ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
 .tool-part pre {
   margin: 0;
   overflow: auto;
@@ -285,6 +309,28 @@ select { height: 40px; padding: 0 12px; }
   padding: 4px 9px;
   text-decoration: none;
   font-size: 12px;
+}
+.attachments .attachment-thumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(260px, 100%);
+  border-radius: 12px;
+  text-decoration: none;
+  padding: 6px;
+}
+.attachments .attachment-thumb img {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--md-surface-container-highest);
+}
+.attachments .attachment-thumb span {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .latency {

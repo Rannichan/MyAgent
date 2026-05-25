@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Brain, ImagePlus, MessageSquarePlus, Moon, Pencil, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
+import { Bot, Brain, Check, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
+import { marked } from 'marked';
 import { api } from './api';
 import type { Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcProfile, RuntimeConfig } from './types';
 
@@ -12,6 +13,108 @@ type ThemeMode = 'light' | 'dark';
 
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
+
+function safeFilename(name: string) {
+  return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation';
+}
+
+function renderMarkdown(content: string): string {
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return marked.parse(escaped, { gfm: true, breaks: true }) as string;
+}
+
+function wrapTextLines(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    if (!paragraph) {
+      lines.push('');
+      continue;
+    }
+    let current = '';
+    for (const char of paragraph) {
+      const next = `${current}${char}`;
+      if (context.measureText(next).width > maxWidth && current) {
+        lines.push(current);
+        current = char;
+      } else {
+        current = next;
+      }
+    }
+    lines.push(current);
+  }
+  return lines;
+}
+
+async function conversationToImageBlob(conversation: Conversation, assistantName: string): Promise<Blob> {
+  const width = 1200;
+  const padding = 52;
+  const contentWidth = width - padding * 2;
+  const lineHeight = 34;
+  const roleGap = 18;
+  const bottomPadding = 60;
+
+  const draft = document.createElement('canvas');
+  const draftCtx = draft.getContext('2d');
+  if (!draftCtx) throw new Error('无法生成图片');
+  draftCtx.font = '24px "Segoe UI", sans-serif';
+
+  let totalLines = 3;
+  const blocks = conversation.messages.map((message) => {
+    const role = message.role === 'user' ? '你' : assistantName;
+    const parts: string[] = [];
+    if (message.reasoning_content.trim()) parts.push(`思考: ${message.reasoning_content.trim()}`);
+    if (message.tool_calls.length > 0) parts.push(`工具调用: ${JSON.stringify(message.tool_calls)}`);
+    parts.push(message.content || '（空）');
+    if (message.attachments.length > 0) {
+      const names = message.attachments.map((file) => `${file.kind === 'image' ? '图片' : file.kind === 'video' ? '视频' : '文件'}:${file.name}`).join('，');
+      parts.push(`附件: ${names}`);
+    }
+    const lines = wrapTextLines(draftCtx, parts.join('\n'), contentWidth - 8);
+    totalLines += lines.length + 1;
+    return { role, lines, isUser: message.role === 'user' };
+  });
+
+  const height = Math.max(720, padding * 2 + totalLines * lineHeight + blocks.length * roleGap + bottomPadding);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('无法生成图片');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#111827';
+  ctx.font = '700 36px "Segoe UI", sans-serif';
+  ctx.fillText(conversation.title, padding, padding);
+  ctx.font = '500 20px "Segoe UI", sans-serif';
+  ctx.fillStyle = '#6b7280';
+  ctx.fillText(`模式: ${conversation.mode === 'npc' ? 'NPC' : 'Agent'} · 消息数: ${conversation.messages.length}`, padding, padding + 42);
+
+  let y = padding + 90;
+  blocks.forEach((block) => {
+    ctx.font = '600 24px "Segoe UI", sans-serif';
+    ctx.fillStyle = block.isUser ? '#0f766e' : '#4338ca';
+    ctx.fillText(block.role, padding, y);
+    y += roleGap;
+    ctx.font = '400 24px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#111827';
+    block.lines.forEach((line) => {
+      ctx.fillText(line || ' ', padding, y);
+      y += lineHeight;
+    });
+    y += 10;
+  });
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('图片导出失败'));
+    }, 'image/png');
+  });
+}
 
 function resolveInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
@@ -68,7 +171,7 @@ function MessageParts({ message }: { message: ChatMessage }) {
       )}
       <section className="part answer-part">
         <div className="part-title"><Bot size={15} /> 正文</div>
-        <p>{item.content || '正在生成...'}</p>
+        <div className="markdown-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.content || '正在生成...') }} />
       </section>
     </div>
   );
@@ -95,6 +198,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(resolveInitialTheme);
   const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -153,6 +257,12 @@ export default function App() {
     selectConversation(conversation);
   }
 
+  async function switchMode(nextMode: Mode) {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    await newConversation(nextMode);
+  }
+
   async function removeConversation(id: string) {
     await api.deleteConversation(id);
     const remaining = conversations.filter((item) => item.id !== id);
@@ -162,6 +272,44 @@ export default function App() {
       if (next) selectConversation(next);
       else setActive(null);
     }
+  }
+
+  async function copyAssistantMessage(item: ChatMessage) {
+    if (!item.content.trim()) return;
+    await navigator.clipboard.writeText(item.content);
+    setCopiedMessageId(item.id);
+    window.setTimeout(() => setCopiedMessageId((current) => (current === item.id ? null : current)), 1600);
+  }
+
+  function getConversation(id: string): Conversation | undefined {
+    if (active?.id === id) return active;
+    return conversations.find((conversation) => conversation.id === id);
+  }
+
+  function downloadConversationJson(id: string) {
+    const conversation = getConversation(id);
+    if (!conversation) return;
+    const blob = new Blob([JSON.stringify(conversation, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFilename(conversation.title)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadConversationImage(id: string) {
+    const conversation = getConversation(id);
+    if (!conversation) return;
+    const npcName = npcs.find((npc) => npc.id === conversation.npc_id)?.name;
+    const assistantName = normalizeMode(conversation.mode) === 'npc' ? (npcName || 'NPC') : 'Agent';
+    const blob = await conversationToImageBlob(conversation, assistantName);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFilename(conversation.title)}.png`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function onUpload(files: FileList | null) {
@@ -357,6 +505,18 @@ export default function App() {
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            className="context-menu-item"
+            onClick={() => { void downloadConversationJson(contextMenu.id); setContextMenu(null); }}
+          >
+            <Download size={14} /> 下载 JSON
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => { void downloadConversationImage(contextMenu.id); setContextMenu(null); }}
+          >
+            <Download size={14} /> 下载图片
+          </button>
+          <button
             className="context-menu-item danger"
             onClick={() => { removeConversation(contextMenu.id); setContextMenu(null); }}
           >
@@ -369,7 +529,7 @@ export default function App() {
         <header className="topbar">
           <div className="mode-tabs">
             {modes.map((item) => (
-              <button key={item} className={mode === item ? 'selected' : ''} onClick={() => setMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>
+              <button key={item} className={mode === item ? 'selected' : ''} onClick={() => void switchMode(item)}>{item === 'agent' ? 'Agent' : 'NPC'}</button>
             ))}
           </div>
           <select value={npcId} disabled={mode !== 'npc'} onChange={(event) => setNpcId(event.target.value)}>
@@ -398,6 +558,11 @@ export default function App() {
                     {item.role === 'assistant' && latencyMap[item.id] != null && (
                       <span className="latency">{latencyMap[item.id]} ms</span>
                     )}
+                    {item.role === 'assistant' && (
+                      <button className="tiny-button" title="复制回复" onClick={() => void copyAssistantMessage(item)}>
+                        {copiedMessageId === item.id ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    )}
                   </div>
                   {editingId === item.id ? (
                     <div className="editor-inline">
@@ -407,7 +572,20 @@ export default function App() {
                   ) : (
                     <MessageParts message={item} />
                   )}
-                  {item.attachments.length > 0 && <div className="attachments">{item.attachments.map((file) => <a key={file.id} href={file.url} target="_blank">{file.name}</a>)}</div>}
+                  {item.attachments.length > 0 && (
+                    <div className="attachments">
+                      {item.attachments.map((file) => (
+                        file.kind === 'image' ? (
+                          <a key={file.id} className="attachment-thumb" href={file.url} target="_blank" rel="noreferrer">
+                            <img src={file.url} alt={file.name} loading="lazy" />
+                            <span>{file.name}</span>
+                          </a>
+                        ) : (
+                          <a key={file.id} href={file.url} target="_blank" rel="noreferrer">{file.name}</a>
+                        )
+                      ))}
+                    </div>
+                  )}
                 </div>
               </article>
             );

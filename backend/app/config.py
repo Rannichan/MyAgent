@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     @property
     def npc_dir(self) -> Path:
-        return ROOT_DIR / "Nnpc"
+        return ROOT_DIR / "npc"
 
     @property
     def agent_dir(self) -> Path:

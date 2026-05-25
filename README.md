@@ -8,7 +8,7 @@
 MyAgent/
   backend/        FastAPI API 服务
   frontend/       Vite + React 前端
-  Nnpc/           NPC 人设目录
+  npc/           NPC 人设目录
   agent/          Agent prompt 片段目录
   .env.example    模型与服务配置模板
 ```
@@ -48,10 +48,10 @@ npm run dev
 
 ## NPC 模式
 
-在 `Nnpc/` 下每个子目录代表一个角色：
+在 `npc/` 下每个子目录代表一个角色：
 
 ```text
-Nnpc/example/
+npc/example/
   system.md      角色人设，作为 system prompt
   opening.md     可选开场白
 ```

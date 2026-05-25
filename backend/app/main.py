@@ -442,7 +442,10 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
                         break
                     if chunk.get("usage"):
                         usage_data = chunk["usage"]
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
                     reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning") or ""
                     if reasoning_delta:
                         reasoning_parts.append(reasoning_delta)
@@ -500,7 +503,8 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
     t0 = time.time()
     response = await client.complete(request_payload)
     latency_ms = int((time.time() - t0) * 1000)
-    choice = response.get("choices", [{}])[0]
+    choices = response.get("choices") or [{}]
+    choice = choices[0]
     message = choice.get("message", {})
     raw_usage = response.get("usage")
     content, tag_reasoning = split_thinking_tags(message.get("content") or "")

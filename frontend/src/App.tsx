@@ -730,6 +730,7 @@ export default function App() {
       await refreshNpcs(npcEditingId ? nextId : undefined, !npcEditingId);
       setNpcEditingId(nextId);
       setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
+      showToast('保存成功');
     } catch (error) {
       setNpcError(`保存失败：${String(error)}`);
     } finally {
@@ -792,6 +793,7 @@ export default function App() {
       await refreshAgents(agentEditingId ? nextId : undefined, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft(payload);
+      showToast('保存成功');
     } catch (error) {
       setAgentError(`保存失败：${String(error)}`);
     } finally {
@@ -883,8 +885,8 @@ export default function App() {
         if (data.usage != null && data.assistant_message?.id) {
           setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
         }
+        await refreshConversations(conversationToUse.id);
       }
-      await refreshConversations(conversationToUse.id);
     } catch (error) {
       appendToAssistantPart(localAssistant.id, 'content', `\n请求失败：${String(error)}`);
     }
@@ -932,6 +934,36 @@ export default function App() {
     }
   }
 
+  function handleSseEvent(rawEvent: string, assistantId: string) {
+    const line = rawEvent
+      .split('\n')
+      .map((item) => item.trim())
+      .find((item) => item.startsWith('data:'));
+    if (!line) return;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let data: any;
+    try {
+      data = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    if (data.type === 'token') appendToAssistantPart(assistantId, 'content', data.content);
+    if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
+    if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
+    if (data.type === 'done') {
+      selectConversation(data.conversation);
+      setConversations((items) => [data.conversation, ...items.filter((item) => item.id !== data.conversation.id)]);
+      if (data.latency_ms != null && data.assistant_message?.id) {
+        setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
+      }
+      if (data.usage != null && data.assistant_message?.id) {
+        setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
+      }
+    }
+    if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
+  }
+
   async function streamChat(body: unknown, assistantId: string) {
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -947,27 +979,15 @@ export default function App() {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
+      const events = buffer.replace(/\r\n/g, '\n').split('\n\n');
       buffer = events.pop() ?? '';
       for (const event of events) {
-        const line = event.split('\n').find((item) => item.startsWith('data: '));
-        if (!line) continue;
-        const data = JSON.parse(line.slice(6));
-        if (data.type === 'token') appendToAssistantPart(assistantId, 'content', data.content);
-        if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
-        if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
-        if (data.type === 'done') {
-          selectConversation(data.conversation);
-          if (data.latency_ms != null && data.assistant_message?.id) {
-            setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
-          }
-          if (data.usage != null && data.assistant_message?.id) {
-            setUsageMap((prev) => ({ ...prev, [data.assistant_message.id]: data.usage }));
-          }
-        }
-        if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
+        handleSseEvent(event, assistantId);
       }
     }
+    buffer += decoder.decode();
+    const trailing = buffer.replace(/\r\n/g, '\n').trim();
+    if (trailing) handleSseEvent(trailing, assistantId);
   }
 
   function appendToAssistantPart(id: string, field: 'content' | 'reasoning_content', token: string) {
@@ -1257,6 +1277,7 @@ export default function App() {
                         setUserError('');
                         api.saveUser(userContent).then(() => {
                           setSavedUserContent(userContent);
+                          showToast('保存成功');
                           setUserSaving(false);
                         }).catch((err: unknown) => {
                           setUserError(`保存失败：${String(err)}`);
@@ -1330,6 +1351,7 @@ export default function App() {
                           setLlmConfig(updated);
                           setSavedLlmConfig(updated);
                           setShowLlmApiKey(false);
+                          showToast('保存成功');
                           setLlmConfigSaving(false);
                         }).catch((err: unknown) => {
                           setLlmConfigError(`保存失败：${String(err)}`);

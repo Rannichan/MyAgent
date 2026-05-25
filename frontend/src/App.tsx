@@ -877,7 +877,7 @@ export default function App() {
 
     let conversation = active;
     if (!conversation) {
-      const created = await newConversation(mode, mode === 'npc' ? npcId : null, mode === 'agent' ? agentId : null);
+      const created = await newConversation(mode, mode === 'npc' ? npcId : undefined, mode === 'agent' ? agentId : undefined);
       if (!created) return;
       conversation = created;
     }

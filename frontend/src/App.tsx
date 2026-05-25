@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Brain, ImagePlus, MessageSquarePlus, Moon, Pencil, Save, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
+import { Bot, Brain, ImagePlus, MessageSquarePlus, Moon, Pencil, Send, Settings, Sun, Trash2, UserRound, Wrench } from 'lucide-react';
 import { api } from './api';
-import type { Attachment, ChatMessage, Conversation, Mode, NpcProfile, RuntimeConfig } from './types';
+import type { Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcProfile, RuntimeConfig } from './types';
 
 type Sampling = {
   temperature: number;
@@ -77,6 +77,8 @@ function MessageParts({ message }: { message: ChatMessage }) {
 export default function App() {
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [npcs, setNpcs] = useState<NpcProfile[]>([]);
+  const [modelList, setModelList] = useState<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
   const [mode, setMode] = useState<Mode>('agent');
@@ -91,13 +93,17 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState('');
   const [theme, setTheme] = useState<ThemeMode>(resolveInitialTheme);
+  const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    Promise.all([api.config(), api.npcs(), api.conversations()]).then(([runtime, profiles, items]) => {
+    Promise.all([api.config(), api.npcs(), api.conversations(), api.models()]).then(([runtime, profiles, items, models]) => {
       setConfig(runtime);
       setNpcs(profiles);
       setConversations(items);
+      setModelList(models);
+      setSelectedModel(runtime.model);
       setSampling({
         temperature: runtime.defaults.temperature,
         top_p: runtime.defaults.top_p,
@@ -118,6 +124,13 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('theme-mode', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, [contextMenu]);
 
   const activeNpc = useMemo(() => npcs.find((npc) => npc.id === npcId), [npcId, npcs]);
 
@@ -157,35 +170,25 @@ export default function App() {
     setAttachments((items) => [...items, ...uploaded]);
   }
 
-  async function sendMessage(event: FormEvent) {
-    event.preventDefault();
-    if (!message.trim() || busy) return;
-    setBusy(true);
-
-    let conversation = active;
-    if (!conversation) {
-      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null);
-      setConversations((items) => [conversation!, ...items]);
-    }
-
-    const activeMode = normalizeMode(mode);
-    const localUser = makeMessage('user', message, attachments);
+  async function sendContent(content: string, atts: Attachment[], conversationToUse: Conversation) {
+    const activeMode = normalizeMode(conversationToUse.mode === 'normal' ? mode : conversationToUse.mode as Mode);
+    const npc = activeMode === 'npc' ? npcId : null;
+    const localUser = makeMessage('user', content, atts);
     const localAssistant = makeMessage('assistant', '');
-    setActive({ ...conversation, mode: activeMode, npc_id: activeMode === 'npc' ? npcId : null, messages: [...conversation.messages.map(withMessageDefaults), localUser, localAssistant] });
+    setActive({ ...conversationToUse, mode: activeMode, npc_id: npc, messages: [...conversationToUse.messages.map(withMessageDefaults), localUser, localAssistant] });
 
     const body = {
-      conversation_id: conversation.id,
+      conversation_id: conversationToUse.id,
       mode: activeMode,
-      npc_id: activeMode === 'npc' ? npcId : null,
-      message,
-      attachments,
+      npc_id: npc,
+      message: content,
+      attachments: atts,
       stream,
       thinking_enabled: thinking,
       tools_enabled: tools,
-      sampling
+      sampling,
+      model: selectedModel || undefined,
     };
-    setMessage('');
-    setAttachments([]);
 
     try {
       if (stream) {
@@ -199,10 +202,52 @@ export default function App() {
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
         selectConversation(data.conversation);
+        if (data.latency_ms != null && data.assistant_message?.id) {
+          setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
+        }
       }
-      await refreshConversations(conversation.id);
+      await refreshConversations(conversationToUse.id);
     } catch (error) {
       appendToAssistantPart(localAssistant.id, 'content', `\n请求失败：${String(error)}`);
+    }
+  }
+
+  async function sendMessage(event: FormEvent) {
+    event.preventDefault();
+    if (!message.trim() || busy) return;
+    setBusy(true);
+
+    let conversation = active;
+    if (!conversation) {
+      conversation = await api.createConversation(mode, mode === 'npc' ? npcId : null);
+      setConversations((items) => [conversation!, ...items]);
+    }
+
+    const content = message;
+    const atts = attachments;
+    setMessage('');
+    setAttachments([]);
+
+    try {
+      await sendContent(content, atts, conversation);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendEditedMessage(messageId: string) {
+    if (!active || busy) return;
+    const messageIndex = active.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    setBusy(true);
+    setEditingId(null);
+    const editedContent = draftContent;
+
+    try {
+      const truncated = { ...active, messages: active.messages.slice(0, messageIndex) };
+      const saved = await api.updateConversation(truncated);
+      await sendContent(editedContent, [], saved);
     } finally {
       setBusy(false);
     }
@@ -232,7 +277,12 @@ export default function App() {
         if (data.type === 'token') appendToAssistantPart(assistantId, 'content', data.content);
         if (data.type === 'reasoning') appendToAssistantPart(assistantId, 'reasoning_content', data.content);
         if (data.type === 'tool_call') appendToolCalls(assistantId, data.tool_calls ?? []);
-        if (data.type === 'done') selectConversation(data.conversation);
+        if (data.type === 'done') {
+          selectConversation(data.conversation);
+          if (data.latency_ms != null && data.assistant_message?.id) {
+            setLatencyMap((prev) => ({ ...prev, [data.assistant_message.id]: data.latency_ms }));
+          }
+        }
         if (data.type === 'error') appendToAssistantPart(assistantId, 'content', `\n${data.message}`);
       }
     }
@@ -264,13 +314,9 @@ export default function App() {
     });
   }
 
-  async function saveEditedMessage(messageId: string) {
-    if (!active) return;
-    const updated = { ...active, messages: active.messages.map((message) => (message.id === messageId ? { ...withMessageDefaults(message), content: draftContent } : withMessageDefaults(message))) };
-    const saved = await api.updateConversation(updated);
-    selectConversation(saved);
-    setConversations((items) => items.map((item) => (item.id === saved.id ? saved : item)));
-    setEditingId(null);
+  function assistantDisplayName(): string {
+    if (active?.mode === 'npc') return activeNpc?.name ?? 'NPC';
+    return 'Agent';
   }
 
   return (
@@ -280,7 +326,7 @@ export default function App() {
           <Bot size={24} />
           <div>
             <strong>MyAgent</strong>
-            <span>{config ? `${config.provider} · ${config.model}` : '加载中'}</span>
+            <span>{config ? `${config.provider} · ${selectedModel || config.model}` : '加载中'}</span>
           </div>
         </div>
         <button className="primary-button" onClick={() => newConversation()}>
@@ -288,13 +334,36 @@ export default function App() {
         </button>
         <div className="conversation-list">
           {conversations.map((conversation) => (
-            <button key={conversation.id} className={conversation.id === active?.id ? 'conversation active' : 'conversation'} onClick={() => selectConversation(conversation)}>
+            <button
+              key={conversation.id}
+              className={conversation.id === active?.id ? 'conversation active' : 'conversation'}
+              onClick={() => selectConversation(conversation)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ x: e.clientX, y: e.clientY, id: conversation.id });
+              }}
+            >
               <span>{conversation.title}</span>
               <small>{normalizeMode(conversation.mode) === 'agent' ? 'Agent' : 'NPC'}</small>
             </button>
           ))}
         </div>
       </aside>
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item danger"
+            onClick={() => { removeConversation(contextMenu.id); setContextMenu(null); }}
+          >
+            <Trash2 size={14} /> 删除会话
+          </button>
+        </div>
+      )}
 
       <section className="workspace">
         <header className="topbar">
@@ -310,7 +379,6 @@ export default function App() {
           <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          {active && <button className="icon-button danger" title="删除会话" onClick={() => removeConversation(active.id)}><Trash2 size={18} /></button>}
         </header>
 
         <section className="chat-panel">
@@ -323,13 +391,18 @@ export default function App() {
                 <div className="avatar">{item.role === 'user' ? <UserRound size={18} /> : <Bot size={18} />}</div>
                 <div className="bubble">
                   <div className="message-actions">
-                    <strong>{item.role === 'user' ? '你' : '助手'}</strong>
-                    <button className="tiny-button" title="编辑正文" onClick={() => { setEditingId(item.id); setDraftContent(item.content); }}><Pencil size={14} /></button>
+                    <strong>{item.role === 'user' ? '你' : assistantDisplayName()}</strong>
+                    {item.role === 'user' && (
+                      <button className="tiny-button" title="编辑并重新发送" onClick={() => { setEditingId(item.id); setDraftContent(item.content); }}><Pencil size={14} /></button>
+                    )}
+                    {item.role === 'assistant' && latencyMap[item.id] != null && (
+                      <span className="latency">{latencyMap[item.id]} ms</span>
+                    )}
                   </div>
                   {editingId === item.id ? (
                     <div className="editor-inline">
                       <textarea value={draftContent} onChange={(event) => setDraftContent(event.target.value)} />
-                      <button className="tiny-button" title="保存" onClick={() => saveEditedMessage(item.id)}><Save size={14} /></button>
+                      <button className="tiny-button" title="发送" onClick={() => resendEditedMessage(item.id)}><Send size={14} /></button>
                     </div>
                   ) : (
                     <MessageParts message={item} />
@@ -345,6 +418,16 @@ export default function App() {
         <div className="bottom-dock">
           <section className="settings-bar">
             <div className="settings-title"><Settings size={16} /> 参数</div>
+            <label>模型
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                style={{ height: 34, fontSize: 13 }}
+              >
+                {modelList.length === 0 && <option value={selectedModel}>{selectedModel}</option>}
+                {modelList.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+              </select>
+            </label>
             <label>温度 <input type="number" min="0" max="2" step="0.1" value={sampling.temperature} onChange={(event) => setSampling({ ...sampling, temperature: Number(event.target.value) })} /></label>
             <label>Top P <input type="number" min="0" max="1" step="0.05" value={sampling.top_p} onChange={(event) => setSampling({ ...sampling, top_p: Number(event.target.value) })} /></label>
             <label>Max Tokens <input type="number" min="1" value={sampling.max_tokens} onChange={(event) => setSampling({ ...sampling, max_tokens: Number(event.target.value) })} /></label>

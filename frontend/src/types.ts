@@ -35,6 +35,11 @@ export interface NpcProfile {
   opening?: string | null;
 }
 
+export interface ModelInfo {
+  id: string;
+  object?: string;
+}
+
 export interface RuntimeConfig {
   provider: string;
   model: string;

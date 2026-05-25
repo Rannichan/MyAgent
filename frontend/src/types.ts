@@ -16,6 +16,8 @@ export interface ChatMessage {
   attachments: Attachment[];
   reasoning_content: string;
   tool_calls: unknown[];
+  latency_ms?: number | null;
+  usage?: TokenUsage | null;
 }
 
 export interface Conversation {
@@ -23,6 +25,7 @@ export interface Conversation {
   title: string;
   mode: Mode | 'normal';
   npc_id?: string | null;
+  agent_id?: string | null;
   messages: ChatMessage[];
   created_at: string;
   updated_at: string;
@@ -33,6 +36,29 @@ export interface NpcProfile {
   name: string;
   system_prompt: string;
   opening?: string | null;
+}
+
+export interface NpcDraft {
+  id: string;
+  system_prompt: string;
+  opening?: string | null;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  system_prompt: string;
+}
+
+export interface AgentDraft {
+  id: string;
+  system_prompt: string;
+}
+
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 }
 
 export interface ModelInfo {

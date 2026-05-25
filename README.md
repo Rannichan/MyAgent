@@ -8,7 +8,7 @@
 MyAgent/
   backend/        FastAPI API 服务
   frontend/       Vite + React 前端
-  Nnpc/           NPC 人设目录
+  npc/           NPC 人设目录
   agent/          Agent prompt 片段目录
   .env.example    模型与服务配置模板
 ```
@@ -48,19 +48,22 @@ npm run dev
 
 ## NPC 模式
 
-在 `Nnpc/` 下每个子目录代表一个角色：
+在 `npc/` 下每个子目录代表一个角色：
 
 ```text
-Nnpc/example/
+npc/example/
   system.md      角色人设，作为 system prompt
   opening.md     可选开场白
 ```
 
 前端会自动读取角色列表并允许自由选择。
+同时支持在前端顶部「NPC 管理」中新增、编辑、删除并保存 NPC（保存为 `npc/<id>/system.md` 与可选 `opening.md`）。
 
 ## Agent 模式
 
-`agent/` 目录中的 `soul.md`、`agent.md`、`identity.md`、`memory.md` 会按文件名顺序拼接为 system prompt。你可以继续添加 `.md` 文件，后端会一起读取。
+`agent/` 目录中的 `soul.md`、`agent.md`、`identity.md`、`memory.md` 会按文件名顺序拼接为默认 system prompt。你可以继续添加 `.md` 文件，后端会一起读取。
+
+同时支持在前端顶部「Agent 管理」中新增、编辑、删除并保存 Agent 配置（保存为 `agent/profiles/<id>/system.md`），并在 Agent 模式下选择不同 Agent。
 
 ## 图片与视频
 

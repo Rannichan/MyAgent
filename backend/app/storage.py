@@ -34,7 +34,13 @@ class ConversationStore:
         return Conversation.model_validate_json(path.read_text(encoding="utf-8"))
 
     def create(self, payload: ConversationCreate) -> Conversation:
-        conversation = Conversation(id=new_id(), title=payload.title, mode=payload.mode, npc_id=payload.npc_id)
+        conversation = Conversation(
+            id=new_id(),
+            title=payload.title,
+            mode=payload.mode,
+            npc_id=payload.npc_id,
+            agent_id=payload.agent_id,
+        )
         self.save(conversation)
         return conversation
 
@@ -44,8 +50,10 @@ class ConversationStore:
             conversation.title = payload.title
         if payload.mode is not None:
             conversation.mode = payload.mode
-        if payload.npc_id is not None:
+        if "npc_id" in payload.model_fields_set:
             conversation.npc_id = payload.npc_id
+        if "agent_id" in payload.model_fields_set:
+            conversation.agent_id = payload.agent_id
         if payload.messages is not None:
             conversation.messages = payload.messages
         conversation.updated_at = datetime.utcnow()

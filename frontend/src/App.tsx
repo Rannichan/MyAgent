@@ -369,7 +369,7 @@ export default function App() {
   const [llmConfigSaving, setLlmConfigSaving] = useState(false);
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
-  const [toast, setToast] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [toast, setToast] = useState<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
@@ -419,14 +419,10 @@ export default function App() {
     return !!nextAgentId && agents.some((agent) => agent.id === nextAgentId);
   }
 
-  function showToast(msg: string, pointer?: { x: number; y: number }) {
-    const fallbackX = Math.max(20, Math.min(window.innerWidth - 20, Math.floor(window.innerWidth / 2)));
-    const fallbackY = Math.max(20, Math.min(window.innerHeight - 20, window.innerHeight - 56));
-    const x = pointer ? Math.max(20, Math.min(window.innerWidth - 20, pointer.x + 12)) : fallbackX;
-    const y = pointer ? Math.max(20, Math.min(window.innerHeight - 20, pointer.y + 12)) : fallbackY;
-    setToast({ text: msg, x, y });
+  function showToast(msg: string) {
+    setToast(msg);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => setToast(''), 3000);
   }
 
   function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
@@ -1017,9 +1013,9 @@ export default function App() {
         </div>
         <button
             className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
-            onClick={(event) => {
+            onClick={() => {
               if (!canCreateConversation(mode)) {
-                showToast('请先选择一个NPC或者Agent', { x: event.clientX, y: event.clientY });
+                showToast('请先选择一个NPC或者Agent');
               } else {
                 newConversation();
               }
@@ -1494,11 +1490,20 @@ export default function App() {
               }
             }} />
             <button className="send-button" disabled={busy || !message.trim() || (!active && !canCreateConversation(mode))} title="发送"><Send size={20} /></button>
-            {attachments.length > 0 && <div className="pending-files">{attachments.map((file) => <span key={file.id}>{file.name}</span>)}</div>}
+            {attachments.length > 0 && (
+              <div className="pending-files">
+                {attachments.map((file) => (
+                  <span key={file.id} className="pending-file-chip">
+                    {file.name}
+                    <button type="button" className="pending-file-remove" title="移除" onClick={() => setAttachments((items) => items.filter((a) => a.id !== file.id))}><X size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
           </form>
         </div>
       </section>
-      {toast && <div className="toast" style={{ left: toast.x, top: toast.y }}>{toast.text}</div>}
+      {toast && <div className="snackbar">{toast}</div>}
     </main>
   );
 }

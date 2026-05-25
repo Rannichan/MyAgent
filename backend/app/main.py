@@ -22,6 +22,7 @@ from .prompt_loader import (
     delete_npc,
     load_agent,
     load_agents,
+    load_npc,
     load_agent_prompt,
     load_npcs,
     load_user_prompt,
@@ -312,9 +313,31 @@ def list_conversations(store: ConversationStore = Depends(get_store)) -> list[di
     return [conversation.model_dump(mode="json") for conversation in store.list()]
 
 
+def append_npc_opening_message(
+    conversation,
+    mode: str,
+    npc_id: str | None,
+    settings: Settings,
+    store: ConversationStore,
+):
+    if mode != "npc" or not npc_id:
+        return
+    profile = load_npc(settings, npc_id)
+    opening = (profile.opening or "").strip() if profile else ""
+    if not opening:
+        return
+    store.append(conversation, ChatMessage(id=new_id(), role="assistant", content=opening))
+
+
 @app.post("/api/conversations")
-def create_conversation(payload: ConversationCreate, store: ConversationStore = Depends(get_store)) -> dict:
-    return store.create(payload).model_dump(mode="json")
+def create_conversation(
+    payload: ConversationCreate,
+    store: ConversationStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    conversation = store.create(payload)
+    append_npc_opening_message(conversation, payload.mode, payload.npc_id, settings, store)
+    return conversation.model_dump(mode="json")
 
 
 @app.get("/api/conversations/{conversation_id}")
@@ -370,6 +393,7 @@ def _prepare_chat(payload: ChatRequest, settings: Settings, store: ConversationS
         conversation.agent_id = payload.agent_id
     else:
         conversation = store.create(ConversationCreate(mode=payload.mode, npc_id=payload.npc_id, agent_id=payload.agent_id))
+        append_npc_opening_message(conversation, payload.mode, payload.npc_id, settings, store)
 
     user_message = ChatMessage(id=new_id(), role="user", content=payload.message, attachments=payload.attachments)
     store.append(conversation, user_message)

@@ -284,7 +284,7 @@ function MessageParts({ message, autoCollapseDetails = false }: { message: ChatM
   }, [autoCollapseDetails]);
 
   if (item.role === 'user') {
-    return <p className="body-text">{item.content}</p>;
+    return <div className="markdown-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.content) }} />;
   }
 
   return (
@@ -700,7 +700,7 @@ export default function App() {
           opening: npcDraft.opening?.trim() || null
         });
       }
-      await refreshNpcs(nextId, !npcEditingId);
+      await refreshNpcs(npcEditingId ? nextId : undefined, !npcEditingId);
       setNpcEditingId(nextId);
       setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
     } catch (error) {
@@ -762,7 +762,7 @@ export default function App() {
       } else {
         await api.createAgent(payload);
       }
-      await refreshAgents(nextId, !agentEditingId);
+      await refreshAgents(agentEditingId ? nextId : undefined, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft(payload);
     } catch (error) {
@@ -1360,7 +1360,6 @@ export default function App() {
 
         <section className="chat-panel">
           {!active && <div className="empty-state">选择或新建一个会话</div>}
-          {activeNpc?.opening && active?.messages.length === 0 && <div className="opening">{activeNpc.opening}</div>}
           {active?.messages.map((message) => {
             const item = withMessageDefaults(message);
             const messageLatency = item.latency_ms ?? latencyMap[item.id];

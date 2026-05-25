@@ -110,7 +110,6 @@ class NpcUpdate(BaseModel):
 class AgentProfile(BaseModel):
     id: str
     name: str
-    system: str = ""
     agent: str = ""
     identity: str = ""
     memory: str = ""
@@ -120,7 +119,6 @@ class AgentProfile(BaseModel):
 
 class AgentCreate(BaseModel):
     id: str = Field(min_length=1, max_length=64)
-    system: str = ""
     agent: str = ""
     identity: str = ""
     memory: str = ""
@@ -129,8 +127,11 @@ class AgentCreate(BaseModel):
 
 class AgentUpdate(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    system: str = ""
     agent: str = ""
     identity: str = ""
     memory: str = ""
     soul: str = ""
+
+
+class UserConfig(BaseModel):
+    content: str = ""

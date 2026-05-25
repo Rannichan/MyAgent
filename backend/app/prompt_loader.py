@@ -6,7 +6,7 @@ from pathlib import Path
 from .config import Settings
 from .schemas import AgentProfile, NpcProfile
 
-AGENT_PROMPT_FILENAMES = ("system.md", "agent.md", "identity.md", "memory.md", "soul.md")
+AGENT_PROMPT_FILENAMES = ("agent.md", "identity.md", "soul.md", "memory.md")
 
 
 def _read_text(path: Path) -> str:
@@ -94,13 +94,16 @@ def _normalize_prompt_text(text: str | None) -> str:
     return (text or "").strip()
 
 
-def _compose_agent_prompt(parts: dict[str, str]) -> str:
+def _compose_agent_prompt(parts: dict[str, str], user_text: str = "") -> str:
     sections: list[str] = []
-    for filename in AGENT_PROMPT_FILENAMES:
-        stem = Path(filename).stem
-        text = _normalize_prompt_text(parts.get(stem))
+    order = ["agent", "identity", "user", "soul", "memory"]
+    texts: dict[str, str] = {**parts}
+    if user_text:
+        texts["user"] = user_text
+    for key in order:
+        text = _normalize_prompt_text(texts.get(key))
         if text:
-            sections.append(f"# {stem}\n{text}")
+            sections.append(f"# {key}\n{text}")
     return "\n\n".join(sections)
 
 
@@ -111,21 +114,31 @@ def _load_agent_prompt_parts(directory: Path) -> dict[str, str]:
     }
 
 
+def load_user_prompt(settings: Settings) -> str:
+    return _read_text(settings.agent_dir / "user.md")
+
+
+def save_user_prompt(settings: Settings, text: str) -> str:
+    settings.agent_dir.mkdir(parents=True, exist_ok=True)
+    (settings.agent_dir / "user.md").write_text(text.strip(), encoding="utf-8")
+    return text.strip()
+
+
 def load_agents(settings: Settings) -> list[AgentProfile]:
     directory = _agent_profiles_dir(settings)
     if not directory.exists():
         return []
 
+    user_text = load_user_prompt(settings)
     profiles: list[AgentProfile] = []
     for path in sorted(directory.iterdir()):
         if path.is_dir():
             parts = _load_agent_prompt_parts(path)
-            system_prompt = _compose_agent_prompt(parts)
+            system_prompt = _compose_agent_prompt(parts, user_text)
             profiles.append(
                 AgentProfile(
                     id=path.name,
                     name=path.name,
-                    system=parts["system"],
                     agent=parts["agent"],
                     identity=parts["identity"],
                     memory=parts["memory"],
@@ -140,12 +153,11 @@ def load_agents(settings: Settings) -> list[AgentProfile]:
                     AgentProfile(
                         id=path.stem,
                         name=path.stem,
-                        system=text,
-                        agent="",
+                        agent=text,
                         identity="",
                         memory="",
                         soul="",
-                        system_prompt=_compose_agent_prompt({"system": text}),
+                        system_prompt=_compose_agent_prompt({"agent": text}, user_text),
                     )
                 )
     return profiles
@@ -160,7 +172,6 @@ def load_agent(settings: Settings, agent_id: str | None) -> AgentProfile | None:
 def save_agent(
     settings: Settings,
     agent_id: str,
-    system: str = "",
     agent: str = "",
     identity: str = "",
     memory: str = "",
@@ -173,7 +184,6 @@ def save_agent(
         legacy_file.unlink(missing_ok=True)
     target.mkdir(parents=True, exist_ok=True)
     prompt_parts = {
-        "system": _normalize_prompt_text(system),
         "agent": _normalize_prompt_text(agent),
         "identity": _normalize_prompt_text(identity),
         "memory": _normalize_prompt_text(memory),
@@ -182,15 +192,15 @@ def save_agent(
     for filename in AGENT_PROMPT_FILENAMES:
         stem = Path(filename).stem
         (target / filename).write_text(prompt_parts[stem], encoding="utf-8")
+    user_text = load_user_prompt(settings)
     return AgentProfile(
         id=agent_id,
         name=agent_id,
-        system=prompt_parts["system"],
         agent=prompt_parts["agent"],
         identity=prompt_parts["identity"],
         memory=prompt_parts["memory"],
         soul=prompt_parts["soul"],
-        system_prompt=_compose_agent_prompt(prompt_parts),
+        system_prompt=_compose_agent_prompt(prompt_parts, user_text),
     )
 
 
@@ -230,7 +240,7 @@ def load_agent_prompt(settings: Settings) -> str:
     if not settings.agent_dir.exists():
         return ""
 
-    preferred = ["system.md", "soul.md", "identity.md", "agent.md", "memory.md"]
+    preferred = ["agent.md", "identity.md", "user.md", "soul.md", "memory.md"]
     parts: list[str] = []
     seen: set[Path] = set()
 

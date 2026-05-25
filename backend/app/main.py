@@ -24,10 +24,12 @@ from .prompt_loader import (
     load_agents,
     load_agent_prompt,
     load_npcs,
+    load_user_prompt,
     rename_agent,
     rename_npc,
     save_agent,
     save_npc,
+    save_user_prompt,
 )
 from .schemas import (
     AgentCreate,
@@ -41,6 +43,7 @@ from .schemas import (
     NpcCreate,
     NpcUpdate,
     TokenUsage,
+    UserConfig,
 )
 from .storage import ConversationStore, new_id
 
@@ -166,7 +169,6 @@ def read_agent_profile(agent_id: str | None = None, settings: Settings = Depends
     return {
         "id": None,
         "name": "default",
-        "system": "",
         "agent": "",
         "identity": "",
         "memory": "",
@@ -190,7 +192,6 @@ def create_agent(payload: AgentCreate, settings: Settings = Depends(get_settings
     profile = save_agent(
         settings,
         agent_id,
-        system=payload.system,
         agent=payload.agent,
         identity=payload.identity,
         memory=payload.memory,
@@ -218,7 +219,6 @@ def update_agent(agent_id: str, payload: AgentUpdate, settings: Settings = Depen
     profile = save_agent(
         settings,
         profile_id,
-        system=payload.system,
         agent=payload.agent,
         identity=payload.identity,
         memory=payload.memory,
@@ -234,6 +234,17 @@ def remove_agent(agent_id: str, settings: Settings = Depends(get_settings)) -> d
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Agent not found") from exc
     return {"ok": True}
+
+
+@app.get("/api/user")
+def read_user(settings: Settings = Depends(get_settings)) -> dict:
+    return UserConfig(content=load_user_prompt(settings)).model_dump()
+
+
+@app.put("/api/user")
+def update_user(payload: UserConfig, settings: Settings = Depends(get_settings)) -> dict:
+    content = save_user_prompt(settings, payload.content)
+    return UserConfig(content=content).model_dump()
 
 
 @app.get("/api/conversations")

@@ -1,4 +1,4 @@
-import type { AgentDraft, AgentProfile, Attachment, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig } from './types';
+import type { AgentDraft, AgentProfile, Attachment, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, UserConfig } from './types';
 
 export const api = {
   async config(): Promise<RuntimeConfig> {
@@ -30,6 +30,12 @@ export const api = {
   },
   async deleteNpc(npcId: string): Promise<void> {
     await fetch(`/api/npcs/${npcId}`, { method: 'DELETE' });
+  },
+  async user(): Promise<UserConfig> {
+    return getJson('/api/user');
+  },
+  async saveUser(content: string): Promise<UserConfig> {
+    return putJson('/api/user', { content });
   },
   async conversations(): Promise<Conversation[]> {
     return getJson('/api/conversations');

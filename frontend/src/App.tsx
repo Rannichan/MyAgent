@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Bot, Brain, Check, ChevronDown, Copy, Download, ImagePlus, MessageSquarePlus, Moon, Pencil, Plus, Save, Send, Settings, Sun, Trash2, UserRound, Wrench, X } from 'lucide-react';
 import { marked } from 'marked';
 import { api } from './api';
-import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage } from './types';
+import type { AgentDraft, AgentProfile, Attachment, ChatMessage, Conversation, Mode, ModelInfo, NpcDraft, NpcProfile, RuntimeConfig, TokenUsage, UserConfig } from './types';
 
 type Sampling = {
   temperature: number;
@@ -15,7 +15,7 @@ type ThemeMode = 'light' | 'dark';
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
 const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '' };
-const emptyAgentDraft: AgentDraft = { id: '', system: '', agent: '', identity: '', memory: '', soul: '' };
+const emptyAgentDraft: AgentDraft = { id: '', agent: '', identity: '', memory: '', soul: '' };
 
 function safeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation';
@@ -350,7 +350,7 @@ export default function App() {
   const [profileContextMenu, setProfileContextMenu] = useState<{ x: number; y: number; id: string; kind: 'npc' | 'agent' } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'npc' | 'agent'>('npc');
+  const [settingsTab, setSettingsTab] = useState<'npc' | 'agent' | 'user'>('npc');
   const [npcEditingId, setNpcEditingId] = useState<string | null>(null);
   const [npcDraft, setNpcDraft] = useState<NpcDraft>(emptyNpcDraft);
   const [npcSaving, setNpcSaving] = useState(false);
@@ -359,6 +359,9 @@ export default function App() {
   const [agentDraft, setAgentDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [agentSaving, setAgentSaving] = useState(false);
   const [agentError, setAgentError] = useState<string>('');
+  const [userContent, setUserContent] = useState('');
+  const [userSaving, setUserSaving] = useState(false);
+  const [userError, setUserError] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -366,7 +369,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models()]).then(([runtime, profiles, agentProfiles, items, models]) => {
+    Promise.all([api.config(), api.npcs(), api.agents(), api.conversations(), api.models(), api.user()]).then(([runtime, profiles, agentProfiles, items, models, userCfg]) => {
       setConfig(runtime);
       applyNpcList(profiles, profiles[0]?.id ?? null);
       applyAgentList(agentProfiles, agentProfiles[0]?.id ?? null);
@@ -381,6 +384,7 @@ export default function App() {
       setStream(runtime.defaults.stream);
       setThinking(runtime.defaults.thinking);
       setTools(runtime.defaults.tools);
+      setUserContent((userCfg as UserConfig).content);
       if (items[0]) selectConversation(items[0]);
     });
   }, []);
@@ -445,7 +449,7 @@ export default function App() {
     applyAgentList(items, preferredId, appendPreferredToBottom);
   }
 
-  function openSettings(tab: 'npc' | 'agent') {
+  function openSettings(tab: 'npc' | 'agent' | 'user') {
     setSettingsTab(tab);
     if (tab === 'npc') {
       const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
@@ -457,13 +461,12 @@ export default function App() {
         setNpcDraft(emptyNpcDraft);
       }
       setNpcError('');
-    } else {
+    } else if (tab === 'agent') {
       const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
       if (initial) {
         setAgentEditingId(initial.id);
         setAgentDraft({
           id: initial.id,
-          system: initial.system,
           agent: initial.agent,
           identity: initial.identity,
           memory: initial.memory,
@@ -499,7 +502,6 @@ export default function App() {
     setAgentEditingId(profile.id);
     setAgentDraft({
       id: profile.id,
-      system: profile.system,
       agent: profile.agent,
       identity: profile.identity,
       memory: profile.memory,
@@ -705,7 +707,6 @@ export default function App() {
     setAgentError('');
     const payload = {
       id: nextId,
-      system: agentDraft.system.trim(),
       agent: agentDraft.agent.trim(),
       identity: agentDraft.identity.trim(),
       memory: agentDraft.memory.trim(),
@@ -743,7 +744,6 @@ export default function App() {
         setAgentEditingId(profile.id);
         setAgentDraft({
           id: profile.id,
-          system: profile.system,
           agent: profile.agent,
           identity: profile.identity,
           memory: profile.memory,
@@ -1012,6 +1012,7 @@ export default function App() {
             <div className="settings-tabs">
               <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => { setSettingsTab('npc'); setProfileContextMenu(null); }}>NPC 管理</button>
               <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => { setSettingsTab('agent'); setProfileContextMenu(null); }}>Agent 管理</button>
+              <button type="button" className={settingsTab === 'user' ? 'selected' : ''} onClick={() => { setSettingsTab('user'); setProfileContextMenu(null); }}>User 管理</button>
             </div>
             {settingsTab === 'npc' && (
               <div className="npc-editor-body">
@@ -1110,14 +1111,6 @@ export default function App() {
                       />
                     </label>
                     <label>
-                      system.md
-                      <textarea
-                        value={agentDraft.system}
-                        onChange={(event) => setAgentDraft((draft) => ({ ...draft, system: event.target.value }))}
-                        rows={6}
-                      />
-                    </label>
-                    <label>
                       agent.md
                       <textarea
                         value={agentDraft.agent}
@@ -1153,6 +1146,42 @@ export default function App() {
                   </div>
                   <div className="npc-actions">
                     <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
+                      <Save size={14} /> 保存
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+            {settingsTab === 'user' && (
+              <div className="npc-editor-body">
+                <section className="npc-form" style={{ flex: 1 }}>
+                  <div className="npc-fields">
+                    <label>
+                      user.md（所有 Agent 共享）
+                      <textarea
+                        value={userContent}
+                        onChange={(event) => setUserContent(event.target.value)}
+                        rows={16}
+                      />
+                    </label>
+                    {userError && <div className="npc-error">{userError}</div>}
+                  </div>
+                  <div className="npc-actions">
+                    <button
+                      className="tiny-action"
+                      type="button"
+                      disabled={userSaving}
+                      onClick={() => {
+                        setUserSaving(true);
+                        setUserError('');
+                        api.saveUser(userContent).then(() => {
+                          setUserSaving(false);
+                        }).catch((err: unknown) => {
+                          setUserError(`保存失败：${String(err)}`);
+                          setUserSaving(false);
+                        });
+                      }}
+                    >
                       <Save size={14} /> 保存
                     </button>
                   </div>

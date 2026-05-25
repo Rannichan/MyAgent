@@ -47,7 +47,6 @@ export interface NpcDraft {
 export interface AgentProfile {
   id: string;
   name: string;
-  system: string;
   agent: string;
   identity: string;
   memory: string;
@@ -57,11 +56,14 @@ export interface AgentProfile {
 
 export interface AgentDraft {
   id: string;
-  system: string;
   agent: string;
   identity: string;
   memory: string;
   soul: string;
+}
+
+export interface UserConfig {
+  content: string;
 }
 
 export interface TokenUsage {

@@ -113,6 +113,25 @@ button { border: 0; cursor: pointer; }
 }
 .primary-button:hover, .send-button:hover { box-shadow: var(--md-elevation-2); }
 .primary-button:active, .send-button:active { transform: translateY(1px); }
+.primary-button--disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.primary-button--disabled:hover { box-shadow: none; }
+.primary-button--disabled:active { transform: none; }
+
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--md-on-surface);
+  color: var(--md-surface);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: var(--md-elevation-2);
+  pointer-events: none;
+}
 
 .conversation-list { display: grid; gap: 8px; overflow: auto; padding-right: 2px; }
 .conversation {

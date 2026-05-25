@@ -369,6 +369,8 @@ export default function App() {
   const [llmConfigSaving, setLlmConfigSaving] = useState(false);
   const [llmConfigError, setLlmConfigError] = useState<string>('');
   const [showLlmApiKey, setShowLlmApiKey] = useState(false);
+  const [toast, setToast] = useState<string>('');
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const latestAssistantMessageId = useMemo(
     () => [...(active?.messages ?? [])].reverse().find((item) => item.role === 'assistant')?.id ?? null,
@@ -415,6 +417,12 @@ export default function App() {
   function canCreateConversation(nextMode: Mode, nextNpcId = npcId, nextAgentId = agentId): boolean {
     if (nextMode === 'npc') return !!nextNpcId && npcs.some((npc) => npc.id === nextNpcId);
     return !!nextAgentId && agents.some((agent) => agent.id === nextAgentId);
+  }
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 3000);
   }
 
   function moveProfileToBottom<T extends { id: string }>(items: T[], id?: string | null): T[] {
@@ -991,9 +999,18 @@ export default function App() {
             <span>{config ? `${config.provider} · ${selectedModel || config.model}` : '加载中'}</span>
           </div>
         </div>
-        <button className="primary-button" disabled={!canCreateConversation(mode)} onClick={() => newConversation()}>
-          <MessageSquarePlus size={18} /> 新建会话
-        </button>
+        <button
+            className={`primary-button${!canCreateConversation(mode) ? ' primary-button--disabled' : ''}`}
+            onClick={() => {
+              if (!canCreateConversation(mode)) {
+                showToast('请先选择一个NPC或者Agent');
+              } else {
+                newConversation();
+              }
+            }}
+          >
+            <MessageSquarePlus size={18} /> 新建会话
+          </button>
         <div className="conversation-list">
           {conversations.map((conversation) => {
             const convMode = normalizeMode(conversation.mode);
@@ -1465,6 +1482,7 @@ export default function App() {
           </form>
         </div>
       </section>
+      {toast && <div className="toast">{toast}</div>}
     </main>
   );
 }

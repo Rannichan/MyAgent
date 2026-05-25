@@ -52,9 +52,10 @@ def build_payload(
     stream: bool,
     thinking_enabled: bool,
     tools_enabled: bool,
+    model: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "model": settings.model_name,
+        "model": model or settings.model_name,
         "messages": messages,
         "stream": stream,
         "temperature": sampling.temperature if sampling.temperature is not None else settings.default_temperature,
@@ -105,6 +106,14 @@ class LlmClient:
             response = await client.post(self.endpoint, headers=self.headers, json=payload)
             response.raise_for_status()
             return response.json()
+
+    async def list_models(self) -> list[dict[str, Any]]:
+        url = f"{self.settings.active_base_url.rstrip('/')}/models"
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("data", [])
 
     async def stream(self, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=None) as client:

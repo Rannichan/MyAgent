@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Mode, NpcProfile, RuntimeConfig } from './types';
+import type { Attachment, Conversation, Mode, ModelInfo, NpcProfile, RuntimeConfig } from './types';
 
 export const api = {
   async config(): Promise<RuntimeConfig> {
@@ -6,6 +6,9 @@ export const api = {
   },
   async npcs(): Promise<NpcProfile[]> {
     return getJson('/api/npcs');
+  },
+  async models(): Promise<ModelInfo[]> {
+    return getJson('/api/models');
   },
   async conversations(): Promise<Conversation[]> {
     return getJson('/api/conversations');

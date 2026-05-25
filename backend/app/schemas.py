@@ -65,12 +65,14 @@ class ChatRequest(BaseModel):
     thinking_enabled: bool = False
     tools_enabled: bool = False
     sampling: SamplingSettings = Field(default_factory=SamplingSettings)
+    model: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     conversation: Conversation
     assistant_message: ChatMessage
     raw_tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    latency_ms: Optional[int] = None
 
 
 class NpcProfile(BaseModel):

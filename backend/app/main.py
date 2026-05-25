@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -64,6 +65,15 @@ def read_config(settings: Settings = Depends(get_settings)) -> dict:
 @app.get("/api/npcs")
 def read_npcs(settings: Settings = Depends(get_settings)) -> list[dict]:
     return [profile.model_dump() for profile in load_npcs(settings)]
+
+
+@app.get("/api/models")
+async def list_models(settings: Settings = Depends(get_settings)) -> list[dict]:
+    client = LlmClient(settings)
+    try:
+        return await client.list_models()
+    except Exception:
+        return [{"id": settings.model_name, "object": "model"}]
 
 
 @app.get("/api/agent-profile")
@@ -145,6 +155,7 @@ def _prepare_chat(payload: ChatRequest, settings: Settings, store: ConversationS
         stream=payload.stream,
         thinking_enabled=payload.thinking_enabled,
         tools_enabled=payload.tools_enabled,
+        model=payload.model,
     )
     return conversation, request_payload
 
@@ -163,6 +174,7 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
             reasoning_parts: list[str] = []
             tool_calls: list[dict] = []
             in_thinking_block = False
+            start_time = time.time()
             try:
                 async for chunk in client.stream(request_payload):
                     if chunk.get("done"):
@@ -212,13 +224,16 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
                     tool_calls=tool_calls,
                 )
                 store.append(conversation, assistant_message)
-                yield f"data: {json.dumps({'type': 'done', 'conversation': conversation.model_dump(mode='json'), 'assistant_message': assistant_message.model_dump(mode='json'), 'raw_tool_calls': tool_calls}, ensure_ascii=False)}\n\n"
+                latency_ms = int((time.time() - start_time) * 1000)
+                yield f"data: {json.dumps({'type': 'done', 'conversation': conversation.model_dump(mode='json'), 'assistant_message': assistant_message.model_dump(mode='json'), 'raw_tool_calls': tool_calls, 'latency_ms': latency_ms}, ensure_ascii=False)}\n\n"
             except Exception as exc:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(events(), media_type="text/event-stream")
 
+    t0 = time.time()
     response = await client.complete(request_payload)
+    latency_ms = int((time.time() - t0) * 1000)
     choice = response.get("choices", [{}])[0]
     message = choice.get("message", {})
     content, tag_reasoning = split_thinking_tags(message.get("content") or "")
@@ -236,6 +251,7 @@ async def chat(payload: ChatRequest, settings: Settings = Depends(get_settings),
         conversation=conversation,
         assistant_message=assistant_message,
         raw_tool_calls=message.get("tool_calls") or [],
+        latency_ms=latency_ms,
     ).model_dump(mode="json")
 
 

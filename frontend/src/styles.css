@@ -287,6 +287,40 @@ select { height: 40px; padding: 0 12px; }
   font-size: 12px;
 }
 
+.latency {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-left: auto;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 140px;
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  box-shadow: var(--md-elevation-2);
+  padding: 6px;
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  text-align: left;
+}
+.context-menu-item:hover { background: var(--md-surface-container-highest); }
+.context-menu-item.danger { color: var(--md-error); }
+
 .bottom-dock {
   position: sticky;
   bottom: 0;

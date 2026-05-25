@@ -346,12 +346,12 @@ export default function App() {
   const [usageMap, setUsageMap] = useState<Record<string, TokenUsage>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [npcEditorOpen, setNpcEditorOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'npc' | 'agent'>('npc');
   const [npcEditingId, setNpcEditingId] = useState<string | null>(null);
   const [npcDraft, setNpcDraft] = useState<NpcDraft>(emptyNpcDraft);
   const [npcSaving, setNpcSaving] = useState(false);
   const [npcError, setNpcError] = useState<string>('');
-  const [agentEditorOpen, setAgentEditorOpen] = useState(false);
   const [agentEditingId, setAgentEditingId] = useState<string | null>(null);
   const [agentDraft, setAgentDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [agentSaving, setAgentSaving] = useState(false);
@@ -439,21 +439,30 @@ export default function App() {
     applyAgentList(items, preferredId);
   }
 
-  function openNpcEditor() {
-    const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
-    if (initial) {
-      setNpcEditingId(initial.id);
-      setNpcDraft({
-        id: initial.id,
-        system_prompt: initial.system_prompt,
-        opening: initial.opening ?? ''
-      });
+  function openSettings(tab: 'npc' | 'agent') {
+    setSettingsTab(tab);
+    if (tab === 'npc') {
+      const initial = npcs.find((item) => item.id === npcId) ?? npcs[0] ?? null;
+      if (initial) {
+        setNpcEditingId(initial.id);
+        setNpcDraft({ id: initial.id, system_prompt: initial.system_prompt, opening: initial.opening ?? '' });
+      } else {
+        setNpcEditingId(null);
+        setNpcDraft(emptyNpcDraft);
+      }
+      setNpcError('');
     } else {
-      setNpcEditingId(null);
-      setNpcDraft(emptyNpcDraft);
+      const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
+      if (initial) {
+        setAgentEditingId(initial.id);
+        setAgentDraft({ id: initial.id, system_prompt: initial.system_prompt });
+      } else {
+        setAgentEditingId(null);
+        setAgentDraft(emptyAgentDraft);
+      }
+      setAgentError('');
     }
-    setNpcError('');
-    setNpcEditorOpen(true);
+    setSettingsOpen(true);
   }
 
   function selectNpcForEdit(profile: NpcProfile) {
@@ -470,22 +479,6 @@ export default function App() {
     setNpcEditingId(null);
     setNpcDraft(emptyNpcDraft);
     setNpcError('');
-  }
-
-  function openAgentEditor() {
-    const initial = agents.find((item) => item.id === agentId) ?? agents[0] ?? null;
-    if (initial) {
-      setAgentEditingId(initial.id);
-      setAgentDraft({
-        id: initial.id,
-        system_prompt: initial.system_prompt
-      });
-    } else {
-      setAgentEditingId(null);
-      setAgentDraft(emptyAgentDraft);
-    }
-    setAgentError('');
-    setAgentEditorOpen(true);
   }
 
   function selectAgentForEdit(profile: AgentProfile) {
@@ -963,128 +956,125 @@ export default function App() {
         </div>
       )}
 
-      {npcEditorOpen && (
-        <div className="npc-editor-overlay" onClick={() => setNpcEditorOpen(false)}>
+      {settingsOpen && (
+        <div className="npc-editor-overlay" onClick={() => setSettingsOpen(false)}>
           <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
             <div className="npc-editor-head">
-              <strong>NPC 管理</strong>
-              <button className="tiny-button" type="button" onClick={() => setNpcEditorOpen(false)}><X size={14} /></button>
+              <strong>设置</strong>
+              <button className="tiny-button" type="button" onClick={() => setSettingsOpen(false)}><X size={14} /></button>
             </div>
-            <div className="npc-editor-body">
-              <aside className="npc-list">
-                <div className="npc-list-scroll">
-                  {npcs.map((profile) => (
-                    <button
-                      type="button"
-                      key={profile.id}
-                      className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
-                      onClick={() => selectNpcForEdit(profile)}
-                    >
-                      {profile.name}
+            <div className="settings-tabs">
+              <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => setSettingsTab('npc')}>NPC 管理</button>
+              <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => setSettingsTab('agent')}>Agent 管理</button>
+            </div>
+            {settingsTab === 'npc' && (
+              <div className="npc-editor-body">
+                <aside className="npc-list">
+                  <div className="npc-list-scroll">
+                    {npcs.map((profile) => (
+                      <button
+                        type="button"
+                        key={profile.id}
+                        className={npcEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                        onClick={() => selectNpcForEdit(profile)}
+                      >
+                        {profile.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="npc-list-footer">
+                    <button className="npc-item npc-item-add" type="button" onClick={startNewNpc}>
+                      <Plus size={14} /> 新建
                     </button>
-                  ))}
-                </div>
-                <div className="npc-list-footer">
-                  <button className="npc-item npc-item-add" type="button" onClick={startNewNpc}>
-                    <Plus size={14} /> 新建
-                  </button>
-                </div>
-              </aside>
-              <section className="npc-form">
-                <label>
-                  NPC 标识
-                  <input
-                    value={npcDraft.id}
-                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
-                    placeholder="例如 assistant"
-                  />
-                </label>
-                <label>
-                  System Prompt
-                  <textarea
-                    value={npcDraft.system_prompt}
-                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
-                    rows={8}
-                  />
-                </label>
-                <label>
-                  Opening（可选）
-                  <textarea
-                    value={npcDraft.opening ?? ''}
-                    onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
-                    rows={4}
-                  />
-                </label>
-                {npcError && <div className="npc-error">{npcError}</div>}
-                <div className="npc-actions">
-                  <button className="tiny-action" type="button" onClick={() => void saveNpcDraft()} disabled={npcSaving}>
-                    <Save size={14} /> 保存
-                  </button>
-                  <button className="tiny-action danger" type="button" onClick={() => void removeNpcDraft()} disabled={!npcEditingId || npcSaving}>
-                    <Trash2 size={14} /> 删除
-                  </button>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {agentEditorOpen && (
-        <div className="npc-editor-overlay" onClick={() => setAgentEditorOpen(false)}>
-          <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
-            <div className="npc-editor-head">
-              <strong>Agent 管理</strong>
-              <button className="tiny-button" type="button" onClick={() => setAgentEditorOpen(false)}><X size={14} /></button>
-            </div>
-            <div className="npc-editor-body">
-              <aside className="npc-list">
-                <div className="npc-list-scroll">
-                  {agents.map((profile) => (
-                    <button
-                      type="button"
-                      key={profile.id}
-                      className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
-                      onClick={() => selectAgentForEdit(profile)}
-                    >
-                      {profile.name}
+                  </div>
+                </aside>
+                <section className="npc-form">
+                  <label>
+                    NPC 标识
+                    <input
+                      value={npcDraft.id}
+                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, id: event.target.value }))}
+                      placeholder="例如 assistant"
+                    />
+                  </label>
+                  <label>
+                    System Prompt
+                    <textarea
+                      value={npcDraft.system_prompt}
+                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                      rows={8}
+                    />
+                  </label>
+                  <label>
+                    Opening（可选）
+                    <textarea
+                      value={npcDraft.opening ?? ''}
+                      onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
+                      rows={4}
+                    />
+                  </label>
+                  {npcError && <div className="npc-error">{npcError}</div>}
+                  <div className="npc-actions">
+                    <button className="tiny-action" type="button" onClick={() => void saveNpcDraft()} disabled={npcSaving}>
+                      <Save size={14} /> 保存
                     </button>
-                  ))}
-                </div>
-                <div className="npc-list-footer">
-                  <button className="npc-item npc-item-add" type="button" onClick={startNewAgent}>
-                    <Plus size={14} /> 新建
-                  </button>
-                </div>
-              </aside>
-              <section className="npc-form">
-                <label>
-                  Agent 标识
-                  <input
-                    value={agentDraft.id}
-                    onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
-                    placeholder="例如 planner"
-                  />
-                </label>
-                <label>
-                  System Prompt
-                  <textarea
-                    value={agentDraft.system_prompt}
-                    onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
-                    rows={10}
-                  />
-                </label>
-                {agentError && <div className="npc-error">{agentError}</div>}
-                <div className="npc-actions">
-                  <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
-                    <Save size={14} /> 保存
-                  </button>
-                  <button className="tiny-action danger" type="button" onClick={() => void removeAgentDraft()} disabled={!agentEditingId || agentSaving}>
-                    <Trash2 size={14} /> 删除
-                  </button>
-                </div>
-              </section>
-            </div>
+                    <button className="tiny-action danger" type="button" onClick={() => void removeNpcDraft()} disabled={!npcEditingId || npcSaving}>
+                      <Trash2 size={14} /> 删除
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+            {settingsTab === 'agent' && (
+              <div className="npc-editor-body">
+                <aside className="npc-list">
+                  <div className="npc-list-scroll">
+                    {agents.map((profile) => (
+                      <button
+                        type="button"
+                        key={profile.id}
+                        className={agentEditingId === profile.id ? 'npc-item active' : 'npc-item'}
+                        onClick={() => selectAgentForEdit(profile)}
+                      >
+                        {profile.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="npc-list-footer">
+                    <button className="npc-item npc-item-add" type="button" onClick={startNewAgent}>
+                      <Plus size={14} /> 新建
+                    </button>
+                  </div>
+                </aside>
+                <section className="npc-form">
+                  <label>
+                    Agent 标识
+                    <input
+                      value={agentDraft.id}
+                      onChange={(event) => setAgentDraft((draft) => ({ ...draft, id: event.target.value }))}
+                      placeholder="例如 planner"
+                    />
+                  </label>
+                  <label>
+                    System Prompt
+                    <textarea
+                      value={agentDraft.system_prompt}
+                      onChange={(event) => setAgentDraft((draft) => ({ ...draft, system_prompt: event.target.value }))}
+                      rows={10}
+                    />
+                  </label>
+                  {agentError && <div className="npc-error">{agentError}</div>}
+                  <div className="npc-actions">
+                    <button className="tiny-action" type="button" onClick={() => void saveAgentDraft()} disabled={agentSaving}>
+                      <Save size={14} /> 保存
+                    </button>
+                    <button className="tiny-action danger" type="button" onClick={() => void removeAgentDraft()} disabled={!agentEditingId || agentSaving}>
+                      <Trash2 size={14} /> 删除
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1104,7 +1094,7 @@ export default function App() {
             <option value="">{mode === 'npc' ? '选择 NPC' : '选择 Agent'}</option>
             {(mode === 'npc' ? npcs : agents).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
           </select>
-          <button className="icon-button" type="button" title={mode === 'npc' ? '管理 NPC' : '管理 Agent'} onClick={mode === 'npc' ? openNpcEditor : openAgentEditor}>
+          <button className="icon-button" type="button" title="管理设置" onClick={() => openSettings(mode)}>
             <Settings size={18} />
           </button>
           <button className="icon-button" type="button" title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>

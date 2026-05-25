@@ -420,13 +420,14 @@ select { height: 40px; padding: 0 12px; }
 }
 .npc-editor {
   width: min(920px, 96vw);
-  max-height: min(720px, 92vh);
+  height: min(720px, 92vh);
   background: var(--md-surface);
   border: 1px solid var(--md-outline-variant);
   border-radius: 16px;
   box-shadow: var(--md-elevation-2);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 .npc-editor-head {
   display: flex;
@@ -434,6 +435,26 @@ select { height: 40px; padding: 0 12px; }
   justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--md-outline-variant);
+}
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container);
+}
+.settings-tabs button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-weight: 560;
+  font-size: 13px;
+}
+.settings-tabs button.selected {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
 }
 .npc-editor-body {
   display: grid;
@@ -563,6 +584,7 @@ select { height: 40px; padding: 0 12px; }
   .conversation-list { grid-auto-flow: column; grid-auto-columns: minmax(190px, 1fr); overflow-x: auto; }
   .message.user, .message.assistant { max-width: 100%; }
   .topbar { flex-wrap: wrap; }
+  .npc-editor { height: min(680px, 94vh); }
   .npc-editor-body { grid-template-columns: 1fr; }
   .npc-list { border-right: 0; border-bottom: 1px solid var(--md-outline-variant); max-height: 160px; }
 }

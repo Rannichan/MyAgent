@@ -1018,7 +1018,7 @@ export default function App() {
               <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => { setSettingsTab('npc'); setProfileContextMenu(null); }}>NPC 管理</button>
               <button type="button" className={settingsTab === 'agent' ? 'selected' : ''} onClick={() => { setSettingsTab('agent'); setProfileContextMenu(null); }}>Agent 管理</button>
               <button type="button" className={settingsTab === 'user' ? 'selected' : ''} onClick={() => { setSettingsTab('user'); setProfileContextMenu(null); }}>User 管理</button>
-              <button type="button" className={settingsTab === 'config' ? 'selected' : ''} onClick={() => { setSettingsTab('config'); setProfileContextMenu(null); }}>配置</button>
+              <button type="button" className={settingsTab === 'config' ? 'selected' : ''} onClick={() => { setSettingsTab('config'); setProfileContextMenu(null); }}>LLM配置</button>
             </div>
             {settingsTab === 'npc' && (
               <div className="npc-editor-body">
@@ -1210,42 +1210,23 @@ export default function App() {
                       </select>
                     </label>
                     <label>
-                      模型名称
+                      URL
                       <input
-                        value={llmConfig.model}
-                        onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
-                        placeholder="例如 Qwen3-8B"
+                        value={llmConfig.provider === 'llamacpp' ? llmConfig.llamacpp_base_url : llmConfig.vllm_base_url}
+                        onChange={(e) => setLlmConfig(llmConfig.provider === 'llamacpp'
+                          ? { ...llmConfig, llamacpp_base_url: e.target.value }
+                          : { ...llmConfig, vllm_base_url: e.target.value })}
+                        placeholder={llmConfig.provider === 'llamacpp' ? 'http://127.0.0.1:8080/v1' : 'http://127.0.0.1:8000/v1'}
                       />
                     </label>
                     <label>
-                      vLLM URL
+                      API Key
                       <input
-                        value={llmConfig.vllm_base_url}
-                        onChange={(e) => setLlmConfig({ ...llmConfig, vllm_base_url: e.target.value })}
-                        placeholder="http://127.0.0.1:8000/v1"
-                      />
-                    </label>
-                    <label>
-                      vLLM API Key
-                      <input
-                        value={llmConfig.vllm_api_key}
-                        onChange={(e) => setLlmConfig({ ...llmConfig, vllm_api_key: e.target.value })}
-                        placeholder="EMPTY"
-                      />
-                    </label>
-                    <label>
-                      llama.cpp URL
-                      <input
-                        value={llmConfig.llamacpp_base_url}
-                        onChange={(e) => setLlmConfig({ ...llmConfig, llamacpp_base_url: e.target.value })}
-                        placeholder="http://127.0.0.1:8080/v1"
-                      />
-                    </label>
-                    <label>
-                      llama.cpp API Key
-                      <input
-                        value={llmConfig.llamacpp_api_key}
-                        onChange={(e) => setLlmConfig({ ...llmConfig, llamacpp_api_key: e.target.value })}
+                        type="password"
+                        value={llmConfig.provider === 'llamacpp' ? llmConfig.llamacpp_api_key : llmConfig.vllm_api_key}
+                        onChange={(e) => setLlmConfig(llmConfig.provider === 'llamacpp'
+                          ? { ...llmConfig, llamacpp_api_key: e.target.value }
+                          : { ...llmConfig, vllm_api_key: e.target.value })}
                         placeholder="EMPTY"
                       />
                     </label>

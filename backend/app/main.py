@@ -5,6 +5,7 @@ import mimetypes
 import re
 import time
 from datetime import datetime
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -266,6 +267,7 @@ def _update_env_file(root_dir: Path, updates: dict[str, str]) -> None:
     for key, value in updates.items():
         if key not in written:
             new_lines.append(f"{key}={value}")
+        os.environ[key] = value
     env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 

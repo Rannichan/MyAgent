@@ -85,13 +85,13 @@ class LlmStreamClient {
 
                 val reasoningDelta = delta.optString("reasoning_content")
                     .ifBlank { delta.optString("reasoning") }
-                if (!reasoningDelta.isNullOrBlank()) {
+                if (reasoningDelta.isNotBlank()) {
                     reasoning.append(reasoningDelta)
                     emit(StreamEvent.Reasoning(reasoningDelta))
                 }
 
                 val token = delta.optString("content")
-                if (!token.isNullOrEmpty()) {
+                if (token.isNotEmpty()) {
                     content.append(token)
                     emit(StreamEvent.Token(token))
                 }

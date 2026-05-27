@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -117,7 +117,7 @@ fun ConversationScreen(
                         }) { Text("保存") }
                     } else {
                         IconButton(onClick = { titleEditing = true }) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "编辑标题")
+                            Icon(Icons.Default.Edit, contentDescription = "编辑标题")
                         }
                         Box {
                             IconButton(onClick = { showMoreMenu = true }) {

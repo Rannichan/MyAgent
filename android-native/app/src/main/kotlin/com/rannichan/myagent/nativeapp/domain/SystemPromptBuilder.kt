@@ -16,7 +16,7 @@ object SystemPromptBuilder {
                     "# soul\n${agent?.soul_md.orEmpty()}".trim(),
                     "# memory\n${agent?.memory_md.orEmpty()}".trim()
                 ).filter { it.isNotBlank() }
-                if (thinkingEnabled) parts.joinToString("\n\n") else parts.joinToString("\n\n")
+                parts.joinToString("\n\n")
             }
         }
     }

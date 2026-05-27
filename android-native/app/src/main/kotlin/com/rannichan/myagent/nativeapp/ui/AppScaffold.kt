@@ -55,7 +55,7 @@ fun AppScaffold(vm: AppViewModel) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute != Routes.CONVERSATION
+    val showBottomBar = currentRoute?.startsWith("conversation/") != true
     val dark = isSystemInDarkTheme()
 
     AppTheme(mode = state.mode, darkTheme = dark) {

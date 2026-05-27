@@ -60,7 +60,8 @@ class LocalStore(private val context: Context) {
         val dir = File(npcDir, profile.id).apply { mkdirs() }
         File(dir, "system.md").writeText(profile.system_prompt)
         val opening = File(dir, "opening.md")
-        if ((profile.opening ?: "").isBlank()) opening.delete() else opening.writeText(profile.opening!!)
+        if ((profile.opening ?: "").isBlank()) opening.delete()
+        else opening.writeText(profile.opening!!)
     }
 
     suspend fun deleteNpc(id: String) = withContext(Dispatchers.IO) {

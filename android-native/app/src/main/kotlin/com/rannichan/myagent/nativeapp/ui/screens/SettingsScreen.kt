@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -20,15 +21,47 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.rannichan.myagent.nativeapp.data.model.AgentProfile
 import com.rannichan.myagent.nativeapp.data.model.LlmConfig
+import com.rannichan.myagent.nativeapp.data.model.Mode
 import com.rannichan.myagent.nativeapp.data.model.NpcProfile
+import com.rannichan.myagent.nativeapp.data.model.UserConfig
 import com.rannichan.myagent.nativeapp.ui.AppViewModel
 import com.rannichan.myagent.nativeapp.ui.UiState
 
 @Composable
 fun SettingsScreen(state: UiState, vm: AppViewModel, padding: PaddingValues) {
+    SettingsScreenContent(
+        state = state,
+        padding = padding,
+        onSetThinking = vm::setThinking,
+        onSetTools = vm::setTools,
+        onSetNpc = vm::setNpc,
+        onSaveNpc = vm::saveNpc,
+        onSetAgent = vm::setAgent,
+        onSaveAgent = vm::saveAgent,
+        onSaveUser = vm::saveUser,
+        onSetModel = vm::setModel,
+        onSaveLlmConfig = vm::saveLlmConfig
+    )
+}
+
+@Composable
+fun SettingsScreenContent(
+    state: UiState,
+    padding: PaddingValues,
+    onSetThinking: (Boolean) -> Unit,
+    onSetTools: (Boolean) -> Unit,
+    onSetNpc: (String?) -> Unit,
+    onSaveNpc: (NpcProfile) -> Unit,
+    onSetAgent: (String?) -> Unit,
+    onSaveAgent: (AgentProfile) -> Unit,
+    onSaveUser: (String) -> Unit,
+    onSetModel: (String) -> Unit,
+    onSaveLlmConfig: (LlmConfig) -> Unit
+) {
     var npcId by remember { mutableStateOf(state.selectedNpcId ?: "") }
     var npcPrompt by remember { mutableStateOf(state.npcs.firstOrNull { it.id == npcId }?.system_prompt ?: "") }
     var agentId by remember { mutableStateOf(state.selectedAgentId ?: "") }
@@ -50,9 +83,9 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, padding: PaddingValues) {
                 Text("能力开关")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Thinking")
-                    Switch(checked = state.thinkingEnabled, onCheckedChange = vm::setThinking)
+                    Switch(checked = state.thinkingEnabled, onCheckedChange = onSetThinking)
                     Text("Tools")
-                    Switch(checked = state.toolsEnabled, onCheckedChange = vm::setTools)
+                    Switch(checked = state.toolsEnabled, onCheckedChange = onSetTools)
                 }
             }
         }
@@ -60,17 +93,17 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, padding: PaddingValues) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("NPC 管理")
-                OutlinedTextField(value = npcId, onValueChange = { npcId = it; vm.setNpc(it) }, label = { Text("NPC id") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = npcId, onValueChange = { npcId = it; onSetNpc(it) }, label = { Text("NPC id") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = npcPrompt, onValueChange = { npcPrompt = it }, label = { Text("system.md") }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { vm.saveNpc(NpcProfile(id = npcId, name = npcId, system_prompt = npcPrompt)) }) { Text("保存NPC") }
+                Button(onClick = { onSaveNpc(NpcProfile(id = npcId, name = npcId, system_prompt = npcPrompt)) }) { Text("保存NPC") }
             }
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Agent 管理")
-                OutlinedTextField(value = agentId, onValueChange = { agentId = it; vm.setAgent(it) }, label = { Text("Agent id") }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { vm.saveAgent(AgentProfile(id = agentId, name = agentId)) }) { Text("创建/保存Agent") }
+                OutlinedTextField(value = agentId, onValueChange = { agentId = it; onSetAgent(it) }, label = { Text("Agent id") }, modifier = Modifier.fillMaxWidth())
+                Button(onClick = { onSaveAgent(AgentProfile(id = agentId, name = agentId)) }) { Text("创建/保存Agent") }
             }
         }
 
@@ -78,14 +111,14 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, padding: PaddingValues) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("用户设定")
                 OutlinedTextField(value = userText, onValueChange = { userText = it }, label = { Text("agent/user.md") }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { vm.saveUser(userText) }) { Text("保存用户设定") }
+                Button(onClick = { onSaveUser(userText) }) { Text("保存用户设定") }
             }
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("LLM 配置")
-                OutlinedTextField(value = model, onValueChange = { model = it; vm.setModel(it) }, label = { Text("Model") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = model, onValueChange = { model = it; onSetModel(it) }, label = { Text("Model") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = baseUrl, onValueChange = { baseUrl = it }, label = { Text("Base URL") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text("API Key") }, modifier = Modifier.fillMaxWidth())
                 Button(onClick = {
@@ -94,9 +127,43 @@ fun SettingsScreen(state: UiState, vm: AppViewModel, padding: PaddingValues) {
                     } else {
                         state.llmConfig.copy(model = model, llamacpp_base_url = baseUrl, llamacpp_api_key = apiKey)
                     }
-                    vm.saveLlmConfig(cfg)
+                    onSaveLlmConfig(cfg)
                 }) { Text("保存LLM配置") }
             }
         }
+    }
+}
+
+@Preview(name = "Settings Light", showBackground = true, widthDp = 411, heightDp = 891)
+@Preview(name = "Settings Dark", showBackground = true, widthDp = 411, heightDp = 891, uiMode = 0x20)
+@Composable
+private fun SettingsScreenPreview() {
+    val sampleState = UiState(
+        mode = Mode.agent,
+        selectedNpcId = "npc_guide",
+        selectedAgentId = "agent_default",
+        npcs = listOf(NpcProfile(id = "npc_guide", name = "Guide", system_prompt = "你是行程规划助手")),
+        agents = listOf(AgentProfile(id = "agent_default", name = "Default Agent")),
+        userConfig = UserConfig("请用简体中文回答"),
+        llmConfig = LlmConfig(model = "gpt-4o-mini", vllm_base_url = "https://api.openai.com/v1", vllm_api_key = "sk-..."),
+        model = "gpt-4o-mini",
+        thinkingEnabled = true,
+        toolsEnabled = false
+    )
+
+    MaterialTheme {
+        SettingsScreenContent(
+            state = sampleState,
+            padding = PaddingValues(0.dp),
+            onSetThinking = {},
+            onSetTools = {},
+            onSetNpc = {},
+            onSaveNpc = {},
+            onSetAgent = {},
+            onSaveAgent = {},
+            onSaveUser = {},
+            onSetModel = {},
+            onSaveLlmConfig = {}
+        )
     }
 }

@@ -59,10 +59,10 @@ data class NpcProfile(
 data class AgentProfile(
     val id: String,
     val name: String,
-    val agent: String = "",
-    val identity: String = "",
-    val memory: String = "",
-    val soul: String = ""
+    val agent_md: String = "",
+    val identity_md: String = "",
+    val soul_md: String = "",
+    val memory_md: String = ""
 )
 
 @Serializable
@@ -72,17 +72,15 @@ data class UserConfig(val content: String = "")
 data class LlmConfig(
     val provider: String = "vllm",
     val model: String = "",
-    val vllm_base_url: String = "http://127.0.0.1:8000/v1",
-    val vllm_api_key: String = "EMPTY",
-    val llamacpp_base_url: String = "http://127.0.0.1:8080/v1",
-    val llamacpp_api_key: String = "EMPTY"
+    val base_url: String = "http://127.0.0.1:8000/v1",
+    val api_key: String = "EMPTY"
 )
 
 @Serializable
 data class SamplingSettings(
     val temperature: Double? = null,
     val top_p: Double? = null,
-    val max_tokens: Int? = null,
+    val max_tokens: Double? = null,
     val presence_penalty: Double? = null,
     val frequency_penalty: Double? = null
 )

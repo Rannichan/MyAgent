@@ -30,8 +30,8 @@ class LlmStreamClient {
         toolsEnabled: Boolean
     ): Flow<StreamEvent> = flow {
         val payload = buildPayload(model, systemPrompt, messages, sampling, thinkingEnabled, toolsEnabled, llmConfig.provider)
-        val baseUrl = if (llmConfig.provider == "vllm") llmConfig.vllm_base_url else llmConfig.llamacpp_base_url
-        val apiKey = if (llmConfig.provider == "vllm") llmConfig.vllm_api_key else llmConfig.llamacpp_api_key
+        val baseUrl = llmConfig.base_url
+        val apiKey = llmConfig.api_key
 
         val req = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/chat/completions")
@@ -139,7 +139,7 @@ class LlmStreamClient {
 
         sampling.temperature?.let { payload.put("temperature", it) }
         sampling.top_p?.let { payload.put("top_p", it) }
-        sampling.max_tokens?.let { payload.put("max_tokens", it) }
+        sampling.max_tokens?.let { payload.put("max_tokens", it.toInt()) }
         sampling.presence_penalty?.let { payload.put("presence_penalty", it) }
         sampling.frequency_penalty?.let { payload.put("frequency_penalty", it) }
 

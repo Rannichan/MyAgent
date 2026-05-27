@@ -72,20 +72,20 @@ class LocalStore(private val context: Context) {
             AgentProfile(
                 id = dir.name,
                 name = dir.name,
-                agent = File(dir, "agent.md").takeIf { it.exists() }?.readText() ?: "",
-                identity = File(dir, "identity.md").takeIf { it.exists() }?.readText() ?: "",
-                memory = File(dir, "memory.md").takeIf { it.exists() }?.readText() ?: "",
-                soul = File(dir, "soul.md").takeIf { it.exists() }?.readText() ?: ""
+                agent_md = File(dir, "agent.md").takeIf { it.exists() }?.readText() ?: "",
+                identity_md = File(dir, "identity.md").takeIf { it.exists() }?.readText() ?: "",
+                soul_md = File(dir, "soul.md").takeIf { it.exists() }?.readText() ?: "",
+                memory_md = File(dir, "memory.md").takeIf { it.exists() }?.readText() ?: ""
             )
         }?.sortedBy { it.name.lowercase() } ?: emptyList()
     }
 
     suspend fun saveAgent(profile: AgentProfile) = withContext(Dispatchers.IO) {
         val dir = File(agentDir, profile.id).apply { mkdirs() }
-        File(dir, "agent.md").writeText(profile.agent)
-        File(dir, "identity.md").writeText(profile.identity)
-        File(dir, "memory.md").writeText(profile.memory)
-        File(dir, "soul.md").writeText(profile.soul)
+        File(dir, "agent.md").writeText(profile.agent_md)
+        File(dir, "identity.md").writeText(profile.identity_md)
+        File(dir, "soul.md").writeText(profile.soul_md)
+        File(dir, "memory.md").writeText(profile.memory_md)
     }
 
     suspend fun deleteAgent(id: String) = withContext(Dispatchers.IO) {

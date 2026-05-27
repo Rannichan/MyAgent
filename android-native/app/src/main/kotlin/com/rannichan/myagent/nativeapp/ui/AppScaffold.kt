@@ -1,6 +1,5 @@
 package com.rannichan.myagent.nativeapp.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -21,6 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.rannichan.myagent.nativeapp.ui.screens.AppearanceSettingsScreen
 import com.rannichan.myagent.nativeapp.ui.screens.AgentDetailScreen
 import com.rannichan.myagent.nativeapp.ui.screens.AgentListScreen
 import com.rannichan.myagent.nativeapp.ui.screens.ConversationScreen
@@ -35,6 +35,7 @@ object Routes {
     const val CONVERSATIONS = "conversations"
     const val CONVERSATION = "conversation/{conversationId}"
     const val SETTINGS = "settings"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
     const val SETTINGS_NPC = "settings/npc"
     const val SETTINGS_NPC_DETAIL = "settings/npc/{npcId}"
     const val SETTINGS_AGENT = "settings/agent"
@@ -56,9 +57,13 @@ fun AppScaffold(vm: AppViewModel) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute?.startsWith("conversation/") != true
-    val dark = isSystemInDarkTheme()
+    val dark = state.appearance.dark_mode
 
-    AppTheme(mode = state.mode, darkTheme = dark) {
+    AppTheme(
+        mode = state.mode,
+        themePreset = state.appearance.theme_color,
+        darkTheme = dark
+    ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
@@ -122,10 +127,18 @@ fun AppScaffold(vm: AppViewModel) {
                 }
                 composable(Routes.SETTINGS) {
                     SettingsMainScreen(
+                        onAppearance = { navController.navigate(Routes.SETTINGS_APPEARANCE) },
                         onNpc = { navController.navigate(Routes.SETTINGS_NPC) },
                         onAgent = { navController.navigate(Routes.SETTINGS_AGENT) },
                         onUser = { navController.navigate(Routes.SETTINGS_USER) },
                         onLlm = { navController.navigate(Routes.SETTINGS_LLM) }
+                    )
+                }
+                composable(Routes.SETTINGS_APPEARANCE) {
+                    AppearanceSettingsScreen(
+                        state = state,
+                        onBack = { navController.popBackStack() },
+                        onSave = vm::saveAppearance
                     )
                 }
                 composable(Routes.SETTINGS_NPC) {
@@ -182,11 +195,11 @@ fun AppScaffold(vm: AppViewModel) {
                         state = state,
                         onBack = { navController.popBackStack() },
                         onSave = vm::saveLlmConfig,
-                        onSetModel = vm::setModel
+                        onSetModel = vm::setModel,
+                        onFetchModels = vm::refreshModels
                     )
                 }
             }
         }
     }
 }
-

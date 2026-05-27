@@ -13,6 +13,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class LlmStreamClient {
@@ -115,6 +116,29 @@ class LlmStreamClient {
         }
     }
 
+    @Throws(IOException::class)
+    fun fetchModels(llmConfig: LlmConfig): List<String> {
+        val req = Request.Builder()
+            .url(buildModelsUrl(llmConfig.base_url))
+            .header("Authorization", "Bearer " + llmConfig.api_key)
+            .get()
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                throw IOException("HTTP ${resp.code}: ${resp.body?.string().orEmpty()}")
+            }
+            val body = resp.body?.string().orEmpty()
+            val data = JSONObject(body).optJSONArray("data") ?: JSONArray()
+            return buildList {
+                for (index in 0 until data.length()) {
+                    val id = data.optJSONObject(index)?.optString("id").orEmpty()
+                    if (id.isNotBlank()) add(id)
+                }
+            }.distinct().sorted()
+        }
+    }
+
     private fun buildPayload(
         model: String,
         systemPrompt: String,
@@ -167,5 +191,14 @@ class LlmStreamClient {
             payload.put("tool_choice", "auto")
         }
         return payload.toString()
+    }
+
+    private fun buildModelsUrl(baseUrl: String): String {
+        val normalized = baseUrl.trimEnd('/')
+        return if (normalized.endsWith("/v1")) {
+            normalized.removeSuffix("/v1") + "/models"
+        } else {
+            "$normalized/models"
+        }
     }
 }

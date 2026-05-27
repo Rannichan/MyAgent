@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import com.rannichan.myagent.nativeapp.data.model.Mode
+import com.rannichan.myagent.nativeapp.data.model.ThemeColorPreset
 
 // Agent: indigo/blue seed
 private val AgentLightColors = lightColorScheme(
@@ -68,16 +69,75 @@ val LocalDarkMode = compositionLocalOf { false }
 @Composable
 fun AppTheme(
     mode: Mode,
+    themePreset: ThemeColorPreset = ThemeColorPreset.role,
     darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        mode == Mode.npc && darkTheme -> NpcDarkColors
-        mode == Mode.npc -> NpcLightColors
-        darkTheme -> AgentDarkColors
-        else -> AgentLightColors
+    val colorScheme = when (themePreset) {
+        ThemeColorPreset.role -> when {
+            mode == Mode.npc && darkTheme -> NpcDarkColors
+            mode == Mode.npc -> NpcLightColors
+            darkTheme -> AgentDarkColors
+            else -> AgentLightColors
+        }
+        ThemeColorPreset.blue -> if (darkTheme) AgentDarkColors else AgentLightColors
+        ThemeColorPreset.green -> if (darkTheme) NpcDarkColors else NpcLightColors
+        ThemeColorPreset.purple -> if (darkTheme) PurpleDarkColors else PurpleLightColors
+        ThemeColorPreset.orange -> if (darkTheme) OrangeDarkColors else OrangeLightColors
     }
     CompositionLocalProvider(LocalDarkMode provides darkTheme) {
         MaterialTheme(colorScheme = colorScheme, content = content)
     }
 }
+
+private val PurpleLightColors = lightColorScheme(
+    primary = Color(0xFF7B4DFF),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFE8DDFF),
+    onPrimaryContainer = Color(0xFF27005A),
+    secondary = Color(0xFF625B71),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFE8DEF8),
+    onSecondaryContainer = Color(0xFF1E192B),
+    surface = Color(0xFFFFFBFF),
+    onSurface = Color(0xFF1C1B1F),
+)
+
+private val PurpleDarkColors = darkColorScheme(
+    primary = Color(0xFFCFBCFF),
+    onPrimary = Color(0xFF4412B3),
+    primaryContainer = Color(0xFF5F31E4),
+    onPrimaryContainer = Color(0xFFE8DDFF),
+    secondary = Color(0xFFCBC2DB),
+    onSecondary = Color(0xFF332D41),
+    secondaryContainer = Color(0xFF4A4458),
+    onSecondaryContainer = Color(0xFFE8DEF8),
+    surface = Color(0xFF141218),
+    onSurface = Color(0xFFE6E1E9),
+)
+
+private val OrangeLightColors = lightColorScheme(
+    primary = Color(0xFFB85C00),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFDCC2),
+    onPrimaryContainer = Color(0xFF3B1A00),
+    secondary = Color(0xFF755845),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFDBCB),
+    onSecondaryContainer = Color(0xFF2B1708),
+    surface = Color(0xFFFFF8F5),
+    onSurface = Color(0xFF231A15),
+)
+
+private val OrangeDarkColors = darkColorScheme(
+    primary = Color(0xFFFFB780),
+    onPrimary = Color(0xFF623000),
+    primaryContainer = Color(0xFF8C4600),
+    onPrimaryContainer = Color(0xFFFFDCC2),
+    secondary = Color(0xFFE4BFA9),
+    onSecondary = Color(0xFF432B1B),
+    secondaryContainer = Color(0xFF5C412F),
+    onSecondaryContainer = Color(0xFFFFDBCB),
+    surface = Color(0xFF1A120D),
+    onSurface = Color(0xFFF1DFD6),
+)

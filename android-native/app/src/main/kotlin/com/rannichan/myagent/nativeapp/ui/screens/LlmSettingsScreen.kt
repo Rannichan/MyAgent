@@ -3,6 +3,7 @@
 package com.rannichan.myagent.nativeapp.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,8 +14,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,14 +45,16 @@ fun LlmSettingsScreen(
     state: UiState,
     onBack: () -> Unit,
     onSave: (LlmConfig) -> Unit,
-    onSetModel: (String) -> Unit
+    onSetModel: (String) -> Unit,
+    onFetchModels: (LlmConfig) -> Unit
 ) {
     val cfg = state.llmConfig
-    var baseUrl by rememberSaveable { mutableStateOf(cfg.base_url) }
-    var apiKey by rememberSaveable { mutableStateOf(cfg.api_key) }
-    var model by rememberSaveable { mutableStateOf(cfg.model) }
-    var provider by rememberSaveable { mutableStateOf(cfg.provider) }
+    var baseUrl by rememberSaveable(cfg.base_url) { mutableStateOf(cfg.base_url) }
+    var apiKey by rememberSaveable(cfg.api_key) { mutableStateOf(cfg.api_key) }
+    var model by rememberSaveable(cfg.model) { mutableStateOf(cfg.model) }
+    var provider by rememberSaveable(cfg.provider) { mutableStateOf(cfg.provider) }
     var apiKeyVisible by rememberSaveable { mutableStateOf(false) }
+    var showModels by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -113,14 +121,63 @@ fun LlmSettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
-                value = model,
-                onValueChange = { model = it },
-                label = { Text("模型名称") },
-                placeholder = { Text("qwen3-8b") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = model,
+                    onValueChange = { model = it },
+                    label = { Text("默认模型") },
+                    placeholder = { Text("qwen3-8b") },
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showModels = true }) {
+                            Icon(Icons.Default.UnfoldMore, contentDescription = "选择模型")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownMenu(
+                    expanded = showModels && state.modelOptions.isNotEmpty(),
+                    onDismissRequest = { showModels = false }
+                ) {
+                    state.modelOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                model = option
+                                showModels = false
+                            }
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = {
+                        onFetchModels(
+                            cfg.copy(
+                                base_url = baseUrl,
+                                api_key = apiKey,
+                                model = model,
+                                provider = provider
+                            )
+                        )
+                    },
+                    enabled = !state.isLoadingModels
+                ) {
+                    if (state.isLoadingModels) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                    } else {
+                        Text("拉取模型列表")
+                    }
+                }
+                Text(
+                    text = if (state.modelOptions.isEmpty()) "暂无已发现模型" else "已发现 ${state.modelOptions.size} 个模型",
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
+            if (!state.error.isNullOrBlank()) {
+                Text(state.error)
+            }
         }
     }
 }

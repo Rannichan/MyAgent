@@ -2,6 +2,10 @@
 
 package com.rannichan.myagent.nativeapp.ui.screens
 
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,10 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,10 +64,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.rannichan.myagent.nativeapp.data.model.ChatMessage
 import com.rannichan.myagent.nativeapp.data.model.SamplingSettings
 import com.rannichan.myagent.nativeapp.ui.AppViewModel
 import com.rannichan.myagent.nativeapp.ui.UiState
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ConversationScreen(
@@ -77,6 +90,24 @@ fun ConversationScreen(
     var titleEditing by remember { mutableStateOf(false) }
     var titleText by remember(conversation?.title) { mutableStateOf(conversation?.title ?: "") }
     var showMoreMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val json = remember { Json { prettyPrint = true } }
+    var pendingDownload by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val downloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val export = pendingDownload
+        pendingDownload = null
+        if (uri == null || export == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter().use { writer ->
+                requireNotNull(writer) { "无法写入文件" }
+                writer.write(export.second)
+            }
+        }.onSuccess {
+            Toast.makeText(context, "已导出 ${export.first}", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(context, "导出失败：${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val listState = rememberLazyListState()
     val messages = conversation?.messages ?: emptyList()
@@ -128,6 +159,32 @@ fun ConversationScreen(
                                 onDismissRequest = { showMoreMenu = false }
                             ) {
                                 DropdownMenuItem(
+                                    text = { Text("分享") },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (conversation != null) {
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_SUBJECT, conversation.title)
+                                                putExtra(Intent.EXTRA_TEXT, conversationToShareText(conversation))
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "分享对话"))
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("下载") },
+                                    leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (conversation != null) {
+                                            pendingDownload = sanitizeExportName(conversation.title) to json.encodeToString(conversation)
+                                            downloadLauncher.launch("${sanitizeExportName(conversation.title)}.json")
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("删除") },
                                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                     onClick = {
@@ -147,8 +204,11 @@ fun ConversationScreen(
                 AnimatedVisibility(visible = showParams) {
                     SamplingParamsPanel(
                         sampling = state.sampling,
+                        model = state.model.ifBlank { state.llmConfig.model },
+                        modelOptions = state.modelOptions,
                         thinkingEnabled = state.thinkingEnabled,
                         toolsEnabled = state.toolsEnabled,
+                        onModelChange = vm::setModel,
                         onSamplingChange = vm::setSampling,
                         onThinkingChange = vm::setThinking,
                         onToolsChange = vm::setTools
@@ -266,6 +326,12 @@ private fun MessageBubble(message: ChatMessage) {
                             else MaterialTheme.colorScheme.onSurface
                 )
             }
+            Text(
+                text = formatMessageTime(message.created_at),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
@@ -273,12 +339,17 @@ private fun MessageBubble(message: ChatMessage) {
 @Composable
 private fun SamplingParamsPanel(
     sampling: SamplingSettings,
+    model: String,
+    modelOptions: List<String>,
     thinkingEnabled: Boolean,
     toolsEnabled: Boolean,
+    onModelChange: (String) -> Unit,
     onSamplingChange: (SamplingSettings) -> Unit,
     onThinkingChange: (Boolean) -> Unit,
     onToolsChange: (Boolean) -> Unit
 ) {
+    var modelMenuExpanded by rememberSaveable { mutableStateOf(false) }
+
     Surface(
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
@@ -288,6 +359,36 @@ private fun SamplingParamsPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("采样参数", style = MaterialTheme.typography.labelLarge)
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = model,
+                    onValueChange = onModelChange,
+                    label = { Text("模型") },
+                    placeholder = { Text("输入或选择模型") },
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { modelMenuExpanded = true }) {
+                            Icon(Icons.Default.UnfoldMore, contentDescription = "选择模型")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownMenu(
+                    expanded = modelMenuExpanded && modelOptions.isNotEmpty(),
+                    onDismissRequest = { modelMenuExpanded = false }
+                ) {
+                    modelOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onModelChange(option)
+                                modelMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             LabeledSlider(
                 label = "Temperature  ${"%.2f".format(sampling.temperature ?: 0.7f)}",
@@ -342,3 +443,23 @@ private fun LabeledSlider(
         Slider(value = value, onValueChange = onValueChange, valueRange = range, steps = steps)
     }
 }
+
+private fun formatMessageTime(timestamp: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+private fun sanitizeExportName(title: String): String =
+    title.ifBlank { "conversation" }.replace(Regex("""[\\/:*?"<>|]"""), "_")
+
+private fun conversationToShareText(conversation: com.rannichan.myagent.nativeapp.data.model.Conversation): String =
+    buildString {
+        appendLine(conversation.title)
+        appendLine()
+        conversation.messages.forEach { message ->
+            appendLine("[${formatMessageTime(message.created_at)}] ${message.role}")
+            if (message.reasoning_content.isNotBlank()) {
+                appendLine("思考：${message.reasoning_content}")
+            }
+            appendLine(message.content)
+            appendLine()
+        }
+    }.trim()

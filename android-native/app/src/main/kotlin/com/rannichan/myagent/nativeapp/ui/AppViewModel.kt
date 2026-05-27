@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rannichan.myagent.nativeapp.data.local.LocalStore
 import com.rannichan.myagent.nativeapp.data.model.AgentProfile
+import com.rannichan.myagent.nativeapp.data.model.AppearanceSettings
 import com.rannichan.myagent.nativeapp.data.model.ChatMessage
 import com.rannichan.myagent.nativeapp.data.model.Conversation
 import com.rannichan.myagent.nativeapp.data.model.LlmConfig
@@ -39,6 +40,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val agents = store.listAgents()
             val user = store.loadUser()
             val llmConfig = store.loadLlmConfig()
+            val appearance = store.loadAppearance()
+            val selectedModel = llmConfig.model
             _state.update {
                 it.copy(
                     conversations = conversations,
@@ -47,8 +50,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     agents = agents,
                     userConfig = user,
                     llmConfig = llmConfig,
+                    appearance = appearance,
                     selectedNpcId = npcs.firstOrNull()?.id,
-                    selectedAgentId = agents.firstOrNull()?.id
+                    selectedAgentId = agents.firstOrNull()?.id,
+                    model = selectedModel,
+                    modelOptions = buildModelOptions(llmConfig, selectedModel)
                 )
             }
         }
@@ -253,7 +259,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun saveLlmConfig(config: LlmConfig) {
         viewModelScope.launch {
             store.saveLlmConfig(config)
-            _state.update { it.copy(llmConfig = config) }
+            _state.update {
+                val selectedModel = it.model.ifBlank { config.model }
+                it.copy(
+                    llmConfig = config,
+                    model = selectedModel,
+                    modelOptions = buildModelOptions(config, selectedModel)
+                )
+            }
+        }
+    }
+
+    fun refreshModels(config: LlmConfig) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoadingModels = true, error = null) }
+            runCatching { llm.fetchModels(config) }
+                .onSuccess { models ->
+                    val currentState = _state.value
+                    val preparedConfig = config.copy(available_models = models)
+                    val selectedModel = currentState.model.ifBlank { currentState.llmConfig.model.ifBlank { models.firstOrNull().orEmpty() } }
+                    val updatedConfig = preparedConfig.copy(
+                        model = preparedConfig.model.ifBlank { selectedModel }
+                    )
+                    store.saveLlmConfig(updatedConfig)
+                    _state.update {
+                        it.copy(
+                            llmConfig = updatedConfig,
+                            model = selectedModel,
+                            modelOptions = buildModelOptions(updatedConfig, selectedModel),
+                            isLoadingModels = false
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            isLoadingModels = false,
+                            error = "拉取模型失败：${error.message ?: error::class.java.simpleName}"
+                        )
+                    }
+                }
+        }
+    }
+
+    fun saveAppearance(settings: AppearanceSettings) {
+        viewModelScope.launch {
+            store.saveAppearance(settings)
+            _state.update { it.copy(appearance = settings) }
         }
     }
 
@@ -262,9 +314,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setAgent(id: String?) { _state.update { it.copy(selectedAgentId = id) } }
     fun setThinking(enabled: Boolean) { _state.update { it.copy(thinkingEnabled = enabled) } }
     fun setTools(enabled: Boolean) { _state.update { it.copy(toolsEnabled = enabled) } }
-    fun setModel(model: String) { _state.update { it.copy(model = model) } }
+    fun setModel(model: String) {
+        _state.update {
+            it.copy(
+                model = model,
+                modelOptions = buildModelOptions(it.llmConfig, model)
+            )
+        }
+    }
     fun setSampling(sampling: SamplingSettings) { _state.update { it.copy(sampling = sampling) } }
     fun clearError() { _state.update { it.copy(error = null) } }
+
+    private fun buildModelOptions(config: LlmConfig, selectedModel: String): List<String> = buildSet {
+        addAll(config.available_models.filter { it.isNotBlank() })
+        if (config.model.isNotBlank()) add(config.model)
+        if (selectedModel.isNotBlank()) add(selectedModel)
+    }.sorted()
 }
 
 data class UiState(
@@ -277,10 +342,13 @@ data class UiState(
     val agents: List<AgentProfile> = emptyList(),
     val userConfig: UserConfig = UserConfig(),
     val llmConfig: LlmConfig = LlmConfig(),
+    val appearance: AppearanceSettings = AppearanceSettings(),
     val model: String = "",
+    val modelOptions: List<String> = emptyList(),
     val sampling: SamplingSettings = SamplingSettings(),
     val thinkingEnabled: Boolean = false,
     val toolsEnabled: Boolean = false,
+    val isLoadingModels: Boolean = false,
     val isSending: Boolean = false,
     val error: String? = null
 )

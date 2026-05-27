@@ -73,7 +73,17 @@ data class LlmConfig(
     val provider: String = "vllm",
     val model: String = "",
     val base_url: String = "http://127.0.0.1:8000/v1",
-    val api_key: String = "EMPTY"
+    val api_key: String = "EMPTY",
+    val available_models: List<String> = emptyList()
+)
+
+@Serializable
+enum class ThemeColorPreset { role, blue, green, purple, orange }
+
+@Serializable
+data class AppearanceSettings(
+    val dark_mode: Boolean = false,
+    val theme_color: ThemeColorPreset = ThemeColorPreset.role
 )
 
 @Serializable

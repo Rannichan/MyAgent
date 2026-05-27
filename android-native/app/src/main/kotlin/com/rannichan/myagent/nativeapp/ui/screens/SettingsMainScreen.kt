@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Message
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SettingsMainScreen(
+    onAppearance: () -> Unit,
     onNpc: () -> Unit,
     onAgent: () -> Unit,
     onUser: () -> Unit,
@@ -34,6 +36,15 @@ fun SettingsMainScreen(
         topBar = { TopAppBar(title = { Text("设置") }) }
     ) { innerPadding ->
         LazyColumn(modifier = Modifier.padding(innerPadding)) {
+            item {
+                SettingsNavItem(
+                    title = "外观设置",
+                    subtitle = "切换深色模式和主题颜色",
+                    leadingIcon = { Icon(Icons.Outlined.Palette, contentDescription = null) },
+                    onClick = onAppearance
+                )
+            }
+            item { HorizontalDivider(modifier = Modifier.padding(start = 72.dp)) }
             item {
                 SettingsNavItem(
                     title = "NPC 设置",

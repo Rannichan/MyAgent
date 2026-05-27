@@ -4,6 +4,7 @@ package com.rannichan.myagent.nativeapp.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -204,7 +205,7 @@ private fun RolePickerDialog(
             if (list.isEmpty()) {
                 Text("暂无角色，请先在设置中添加")
             } else {
-                LazyColumn {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
                     items(list) { (id, name) ->
                         TextButton(
                             onClick = { onSelect(id) },

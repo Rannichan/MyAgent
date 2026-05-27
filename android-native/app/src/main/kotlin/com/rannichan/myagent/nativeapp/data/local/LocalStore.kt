@@ -3,6 +3,7 @@ package com.rannichan.myagent.nativeapp.data.local
 import android.content.Context
 import androidx.room.Room
 import com.rannichan.myagent.nativeapp.data.model.AgentProfile
+import com.rannichan.myagent.nativeapp.data.model.AppearanceSettings
 import com.rannichan.myagent.nativeapp.data.model.ChatMessage
 import com.rannichan.myagent.nativeapp.data.model.Conversation
 import com.rannichan.myagent.nativeapp.data.model.LlmConfig
@@ -31,6 +32,7 @@ class LocalStore(private val context: Context) {
     private val agentDir = File(root, "agent/profiles").apply { mkdirs() }
     private val userFile = File(root, "agent/user.md")
     private val llmFile = File(root, "config/llm.json").apply { parentFile?.mkdirs() }
+    private val appearanceFile = File(root, "config/appearance.json").apply { parentFile?.mkdirs() }
 
     suspend fun listConversations(): List<Conversation> = withContext(Dispatchers.IO) {
         db.conversationDao().list().map { it.toModel(json) }
@@ -109,6 +111,16 @@ class LocalStore(private val context: Context) {
 
     suspend fun saveLlmConfig(config: LlmConfig) = withContext(Dispatchers.IO) {
         llmFile.writeText(json.encodeToString(config))
+    }
+
+    suspend fun loadAppearance(): AppearanceSettings = withContext(Dispatchers.IO) {
+        if (!appearanceFile.exists()) return@withContext AppearanceSettings()
+        runCatching { json.decodeFromString<AppearanceSettings>(appearanceFile.readText()) }
+            .getOrElse { AppearanceSettings() }
+    }
+
+    suspend fun saveAppearance(settings: AppearanceSettings) = withContext(Dispatchers.IO) {
+        appearanceFile.writeText(json.encodeToString(settings))
     }
 
     private fun Conversation.toEntity(json: Json): ConversationEntity = ConversationEntity(

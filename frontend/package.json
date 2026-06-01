@@ -11,7 +11,7 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "typescript": "4.9.5",
-    "vite": "2.9.16"
+    "vite": "^8.0.14"
   },
   "devDependencies": {
     "@types/marked": "^5.0.2",

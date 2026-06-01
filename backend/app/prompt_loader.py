@@ -7,12 +7,29 @@ from .config import Settings
 from .schemas import AgentProfile, NpcProfile
 
 AGENT_PROMPT_FILENAMES = ("agent.md", "identity.md", "soul.md", "memory.md")
+DEFAULT_NPC_CONTEXT_TURNS = 10
 
 
 def _read_text(path: Path) -> str:
     if not path.exists() or not path.is_file():
         return ""
     return path.read_text(encoding="utf-8").strip()
+
+
+def _read_npc_context_turns(path: Path) -> int:
+    config_path = path / "settings.json"
+    if not config_path.exists() or not config_path.is_file():
+        return DEFAULT_NPC_CONTEXT_TURNS
+    try:
+        import json
+
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        value = int(data.get("context_turns", DEFAULT_NPC_CONTEXT_TURNS))
+        if value < 1:
+            return DEFAULT_NPC_CONTEXT_TURNS
+        return min(value, 200)
+    except Exception:
+        return DEFAULT_NPC_CONTEXT_TURNS
 
 
 def load_npcs(settings: Settings) -> list[NpcProfile]:
@@ -25,9 +42,24 @@ def load_npcs(settings: Settings) -> list[NpcProfile]:
             system_prompt = _read_text(path / "system.md") or _read_text(path / "prompt.md")
             opening = _read_text(path / "opening.md") or None
             if system_prompt:
-                profiles.append(NpcProfile(id=path.name, name=path.name, system_prompt=system_prompt, opening=opening))
+                profiles.append(
+                    NpcProfile(
+                        id=path.name,
+                        name=path.name,
+                        system_prompt=system_prompt,
+                        opening=opening,
+                        context_turns=_read_npc_context_turns(path),
+                    )
+                )
         elif path.suffix.lower() == ".md":
-            profiles.append(NpcProfile(id=path.stem, name=path.stem, system_prompt=_read_text(path)))
+            profiles.append(
+                NpcProfile(
+                    id=path.stem,
+                    name=path.stem,
+                    system_prompt=_read_text(path),
+                    context_turns=DEFAULT_NPC_CONTEXT_TURNS,
+                )
+            )
     return profiles
 
 
@@ -37,7 +69,7 @@ def load_npc(settings: Settings, npc_id: str | None) -> NpcProfile | None:
     return next((profile for profile in load_npcs(settings) if profile.id == npc_id), None)
 
 
-def save_npc(settings: Settings, npc_id: str, system_prompt: str, opening: str | None) -> NpcProfile:
+def save_npc(settings: Settings, npc_id: str, system_prompt: str, opening: str | None, context_turns: int | None = None) -> NpcProfile:
     target = settings.npc_dir / npc_id
     legacy_file = settings.npc_dir / f"{npc_id}.md"
     if legacy_file.exists() and legacy_file.is_file():
@@ -52,7 +84,22 @@ def save_npc(settings: Settings, npc_id: str, system_prompt: str, opening: str |
     else:
         opening_path.unlink(missing_ok=True)
 
-    return NpcProfile(id=npc_id, name=npc_id, system_prompt=system_prompt.strip(), opening=opening_text or None)
+    context_turns_value = context_turns if context_turns is not None else DEFAULT_NPC_CONTEXT_TURNS
+    context_turns_value = max(1, min(int(context_turns_value), 200))
+    import json
+
+    (target / "settings.json").write_text(
+        json.dumps({"context_turns": context_turns_value}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return NpcProfile(
+        id=npc_id,
+        name=npc_id,
+        system_prompt=system_prompt.strip(),
+        opening=opening_text or None,
+        context_turns=context_turns_value,
+    )
 
 
 def rename_npc(settings: Settings, old_id: str, new_id: str) -> None:

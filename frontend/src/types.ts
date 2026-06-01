@@ -36,12 +36,14 @@ export interface NpcProfile {
   name: string;
   system_prompt: string;
   opening?: string | null;
+  context_turns: number;
 }
 
 export interface NpcDraft {
   id: string;
   system_prompt: string;
   opening?: string | null;
+  context_turns: number;
 }
 
 export interface AgentProfile {

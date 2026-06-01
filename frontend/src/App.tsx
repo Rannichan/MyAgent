@@ -14,7 +14,7 @@ type ThemeMode = 'light' | 'dark';
 
 const emptySampling: Sampling = { temperature: 0.7, top_p: 0.9, max_tokens: 2048 };
 const modes: Mode[] = ['agent', 'npc'];
-const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '' };
+const emptyNpcDraft: NpcDraft = { id: '', system_prompt: '', opening: '', context_turns: 10 };
 const emptyAgentDraft: AgentDraft = { id: '', agent: '', identity: '', memory: '', soul: '' };
 
 function safeFilename(name: string) {
@@ -452,6 +452,16 @@ export default function App() {
     applyNpcList(items, preferredId, appendPreferredToBottom);
   }
 
+  async function refreshModels(preferredModel?: string | null) {
+    const models = await api.models();
+    const preferred = (preferredModel ?? selectedModel ?? config?.model ?? '').trim();
+    const nextModel = models.some((item) => item.id === preferred)
+      ? preferred
+      : (models[0]?.id ?? '');
+    setModelList(models);
+    setSelectedModel(nextModel);
+  }
+
   function applyAgentList(next: AgentProfile[], preferredId?: string | null, appendPreferredToBottom = false) {
     const ordered = appendPreferredToBottom ? moveProfileToBottom(next, preferredId) : next;
     setAgents(ordered);
@@ -476,7 +486,12 @@ export default function App() {
     const initial = npcs.find((item) => item.id === (preferredId ?? npcId)) ?? npcs[0] ?? null;
     if (initial) {
       setNpcEditingId(initial.id);
-      setNpcDraft({ id: initial.id, system_prompt: initial.system_prompt, opening: initial.opening ?? '' });
+      setNpcDraft({
+        id: initial.id,
+        system_prompt: initial.system_prompt,
+        opening: initial.opening ?? '',
+        context_turns: initial.context_turns ?? 10,
+      });
     } else {
       setNpcEditingId(null);
       setNpcDraft(emptyNpcDraft);
@@ -544,7 +559,8 @@ export default function App() {
     setNpcDraft({
       id: profile.id,
       system_prompt: profile.system_prompt,
-      opening: profile.opening ?? ''
+      opening: profile.opening ?? '',
+      context_turns: profile.context_turns ?? 10,
     });
     setNpcError('');
   }
@@ -718,18 +734,26 @@ export default function App() {
         await api.updateNpc(npcEditingId, {
           id: nextId,
           system_prompt: prompt,
-          opening: npcDraft.opening?.trim() || null
+          opening: npcDraft.opening?.trim() || null,
+          context_turns: npcDraft.context_turns,
         });
       } else {
         await api.createNpc({
           id: nextId,
           system_prompt: prompt,
-          opening: npcDraft.opening?.trim() || null
+          opening: npcDraft.opening?.trim() || null,
+          context_turns: npcDraft.context_turns,
         });
       }
       await refreshNpcs(npcEditingId ? nextId : undefined, !npcEditingId);
       setNpcEditingId(nextId);
-      setNpcDraft((current) => ({ ...current, id: nextId, system_prompt: prompt, opening: current.opening?.trim() || '' }));
+      setNpcDraft((current) => ({
+        ...current,
+        id: nextId,
+        system_prompt: prompt,
+        opening: current.opening?.trim() || '',
+      }));
+      await refreshModels(selectedModel);
       showToast('保存成功');
     } catch (error) {
       setNpcError(`保存失败：${String(error)}`);
@@ -755,7 +779,8 @@ export default function App() {
         setNpcDraft({
           id: profile.id,
           system_prompt: profile.system_prompt,
-          opening: profile.opening ?? ''
+          opening: profile.opening ?? '',
+          context_turns: profile.context_turns ?? 10,
         });
       }
       if (mode === 'npc' && id === npcId) {
@@ -793,6 +818,7 @@ export default function App() {
       await refreshAgents(agentEditingId ? nextId : undefined, !agentEditingId);
       setAgentEditingId(nextId);
       setAgentDraft(payload);
+      await refreshModels(selectedModel);
       showToast('保存成功');
     } catch (error) {
       setAgentError(`保存失败：${String(error)}`);
@@ -1101,11 +1127,11 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <div className="npc-editor-overlay" onClick={closeSettings}>
-          <div className="npc-editor" onClick={(event) => event.stopPropagation()}>
+        <div className="npc-editor-overlay">
+          <div className="npc-editor">
             <div className="npc-editor-head">
               <strong>设置</strong>
-              <button className="tiny-button" type="button" onClick={closeSettings}><X size={14} /></button>
+              <button className="tiny-action" type="button" onClick={closeSettings}>关闭设置</button>
             </div>
             <div className="settings-tabs">
               <button type="button" className={settingsTab === 'npc' ? 'selected' : ''} onClick={() => switchSettingsTab('npc')}>NPC 管理</button>
@@ -1163,6 +1189,19 @@ export default function App() {
                         value={npcDraft.opening ?? ''}
                         onChange={(event) => setNpcDraft((draft) => ({ ...draft, opening: event.target.value }))}
                         rows={6}
+                      />
+                    </label>
+                    <label>
+                      上下文轮次限制（最近 x 轮）
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={npcDraft.context_turns}
+                        onChange={(event) => {
+                          const nextValue = Math.max(1, Math.min(200, Number(event.target.value) || 1));
+                          setNpcDraft((draft) => ({ ...draft, context_turns: nextValue }));
+                        }}
                       />
                     </label>
                     {npcError && <div className="npc-error">{npcError}</div>}
@@ -1277,8 +1316,13 @@ export default function App() {
                         setUserError('');
                         api.saveUser(userContent).then(() => {
                           setSavedUserContent(userContent);
-                          showToast('保存成功');
-                          setUserSaving(false);
+                          refreshModels(selectedModel).then(() => {
+                            showToast('保存成功');
+                            setUserSaving(false);
+                          }).catch((err: unknown) => {
+                            setUserError(`刷新模型失败：${String(err)}`);
+                            setUserSaving(false);
+                          });
                         }).catch((err: unknown) => {
                           setUserError(`保存失败：${String(err)}`);
                           setUserSaving(false);
@@ -1352,8 +1396,13 @@ export default function App() {
                           setSavedLlmConfig(updated);
                           setConfig((current) => current ? { ...current, provider: updated.provider } : current);
                           setShowLlmApiKey(false);
-                          showToast('保存成功');
-                          setLlmConfigSaving(false);
+                          refreshModels(updated.model || selectedModel).then(() => {
+                            showToast('保存成功');
+                            setLlmConfigSaving(false);
+                          }).catch((err: unknown) => {
+                            setLlmConfigError(`刷新模型失败：${String(err)}`);
+                            setLlmConfigSaving(false);
+                          });
                         }).catch((err: unknown) => {
                           setLlmConfigError(`保存失败：${String(err)}`);
                           setLlmConfigSaving(false);

@@ -121,7 +121,7 @@ def create_npc(payload: NpcCreate, settings: Settings = Depends(get_settings)) -
     target = settings.npc_dir / npc_id
     if target.exists():
         raise HTTPException(status_code=409, detail="NPC already exists")
-    profile = save_npc(settings, npc_id, payload.system_prompt, payload.opening)
+    profile = save_npc(settings, npc_id, payload.system_prompt, payload.opening, payload.context_turns)
     return profile.model_dump(mode="json")
 
 
@@ -141,7 +141,7 @@ def update_npc(npc_id: str, payload: NpcUpdate, settings: Settings = Depends(get
     legacy_source = settings.npc_dir / f"{profile_id}.md"
     if not source.exists() and not legacy_source.exists():
         raise HTTPException(status_code=404, detail="NPC not found")
-    profile = save_npc(settings, profile_id, payload.system_prompt, payload.opening)
+    profile = save_npc(settings, profile_id, payload.system_prompt, payload.opening, payload.context_turns)
     return profile.model_dump(mode="json")
 
 
@@ -337,6 +337,18 @@ def validate_conversation_role(mode: str, npc_id: str | None, agent_id: str | No
         raise HTTPException(status_code=400, detail="agent_id is required for agent mode")
 
 
+def trim_history_by_turns(history: list[ChatMessage], max_turns: int | None) -> list[ChatMessage]:
+    if not max_turns or max_turns < 1:
+        return history
+
+    user_positions = [index for index, message in enumerate(history) if message.role == "user"]
+    if len(user_positions) <= max_turns:
+        return history
+
+    start_index = user_positions[-max_turns]
+    return history[start_index:]
+
+
 @app.post("/api/conversations")
 def create_conversation(
     payload: ConversationCreate,
@@ -408,7 +420,12 @@ def _prepare_chat(payload: ChatRequest, settings: Settings, store: ConversationS
     user_message = ChatMessage(id=new_id(), role="user", content=payload.message, attachments=payload.attachments)
     store.append(conversation, user_message)
     system_prompt = build_system_prompt(settings, payload.mode, payload.npc_id, payload.agent_id, payload.thinking_enabled)
-    messages = build_openai_messages(system_prompt, conversation.messages)
+    context_turns: int | None = None
+    if payload.mode == "npc" and payload.npc_id:
+        npc_profile = load_npc(settings, payload.npc_id)
+        context_turns = npc_profile.context_turns if npc_profile else None
+    history = trim_history_by_turns(conversation.messages, context_turns)
+    messages = build_openai_messages(system_prompt, history)
     request_payload = build_payload(
         settings=settings,
         messages=messages,

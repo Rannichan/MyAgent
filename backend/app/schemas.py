@@ -93,18 +93,21 @@ class NpcProfile(BaseModel):
     name: str
     system_prompt: str
     opening: Optional[str] = None
+    context_turns: int = Field(default=10, ge=1, le=200)
 
 
 class NpcCreate(BaseModel):
     id: str = Field(min_length=1, max_length=64)
     system_prompt: str = Field(min_length=1)
     opening: Optional[str] = None
+    context_turns: int = Field(default=10, ge=1, le=200)
 
 
 class NpcUpdate(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1, max_length=64)
     system_prompt: str = Field(min_length=1)
     opening: Optional[str] = None
+    context_turns: int = Field(default=10, ge=1, le=200)
 
 
 class AgentProfile(BaseModel):
